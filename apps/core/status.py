@@ -38,6 +38,8 @@ GENERICO = {
 
 
 def cor_status(entidade: str | None, valor: str) -> str:
+    if valor.lower() in ("success", "info", "warning", "danger", "neutral"):
+        return valor.lower()
     if entidade and entidade in MAPAS:
         return MAPAS[entidade].get(valor, "neutral")
     for mapa in MAPAS.values():

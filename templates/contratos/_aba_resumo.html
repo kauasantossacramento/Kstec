@@ -1,0 +1,39 @@
+<div class="grid g-2-1">
+  <div class="stack">
+    <section class="card">
+      <h3>Objeto</h3><p>{{ obj.objeto|linebreaksbr }}</p>
+      <dl class="defs">
+        <div><dt>Processo</dt><dd class="mono">{{ obj.processo_administrativo|default:"—" }}</dd></div>
+        <div><dt>Fundamento legal</dt><dd>{{ obj.fundamento_legal|default:"—" }}</dd></div>
+        <div><dt>Assinatura</dt><dd>{{ obj.data_assinatura|data_br }}</dd></div>
+        <div><dt>Faturamento</dt><dd>{{ obj.get_forma_faturamento_display }}{% if obj.valor_mensal %} · <span class="mono">{{ obj.valor_mensal|brl }}</span>/mês{% endif %}</dd></div>
+        <div><dt>Gestor</dt><dd>{{ obj.gestor_contrato|default:"—" }}</dd></div>
+        <div><dt>Fiscal do contrato</dt><dd>{{ obj.fiscal_contrato|default:"—" }}</dd></div>
+        <div><dt>Reajuste</dt><dd>{{ obj.indice_reajuste|default:"—" }}{% if obj.data_base_reajuste %} (base {{ obj.data_base_reajuste|data_br }}){% endif %}</dd></div>
+        <div><dt>Certidões exigidas</dt><dd>{{ obj.certidoes_exigidas.all|join:", "|default:"—" }}</dd></div>
+      </dl>
+    </section>
+    <section class="card">
+      <div class="card-cab"><h3>Aditivos</h3></div>
+      {% if aditivos %}<div class="tabela-wrap responsiva"><table class="tabela"><thead><tr><th>Nº</th><th>Tipo</th><th>Data</th><th>Nova vigência</th><th class="num">Acréscimo</th></tr></thead><tbody>
+      {% for a in aditivos %}<tr class="clicavel" data-href="{% url 'contratos:aditivo_detalhe' a.pk %}"><td data-rotulo="Nº">{{ a.numero }}</td><td data-rotulo="Tipo">{{ a.get_tipo_display }}</td><td data-rotulo="Data">{{ a.data|data_br }}</td><td data-rotulo="Nova vigência">{{ a.nova_vigencia_fim|data_br }}</td><td data-rotulo="Acréscimo" class="num mono">{{ a.valor_acrescimo|brl }}</td></tr>{% endfor %}
+      </tbody></table></div>{% else %}<p class="muted small">Nenhum aditivo.</p>{% endif %}
+    </section>
+    <section class="card">
+      <div class="card-cab"><h3>Itens</h3></div>
+      {% if itens %}<div class="tabela-wrap responsiva"><table class="tabela"><thead><tr><th>Descrição</th><th>Un.</th><th class="num">Qtd.</th><th class="num">Unitário</th><th class="num">Total</th></tr></thead><tbody>
+      {% for i in itens %}<tr><td data-rotulo="Descrição">{{ i.descricao }}</td><td data-rotulo="Un.">{{ i.unidade }}</td><td data-rotulo="Qtd." class="num mono">{{ i.quantidade|numero:3 }}</td><td data-rotulo="Unitário" class="num mono">{{ i.valor_unitario|brl }}</td><td data-rotulo="Total" class="num mono">{{ i.valor_total|brl }}</td></tr>{% endfor %}
+      </tbody></table></div>{% else %}<p class="muted small">Nenhum item.</p>{% endif %}
+    </section>
+  </div>
+  <aside class="stack">
+    <section class="card">
+      <div class="card-cab"><h3>Empenhos</h3></div>
+      {% for e in empenhos %}<div class="linha entre small" style="padding:6px 0;border-bottom:1px solid var(--line)"><a href="{% url 'contratos:empenho_detalhe' e.pk %}" class="mono">{{ e.numero }}</a><span class="mono">{{ e.valor|brl }}</span></div>{% empty %}<p class="muted small">Nenhum empenho.</p>{% endfor %}
+    </section>
+    <section class="card">
+      <div class="card-cab"><h3>Competências</h3>{% if pode_escrever %}<form method="post" action="{% url 'contratos:gerar_competencias' obj.pk %}">{% csrf_token %}<button class="btn btn-sm" type="submit">{% icone "refresh" 14 %} Gerar</button></form>{% endif %}</div>
+      {% for c in competencias %}<div class="linha entre small" style="padding:6px 0;border-bottom:1px solid var(--line)"><span class="mono">{{ c.ano_mes|competencia }}</span>{% badge_obj c %}</div>{% empty %}<p class="muted small">Nenhuma competência gerada.</p>{% endfor %}
+    </section>
+  </aside>
+</div>

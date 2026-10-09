@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block titulo %}Contrato {{ obj.numero }}{% endblock %}
+{% block breadcrumb %}{% icone "chevron-right" 14 %}<a href="{{ url_lista }}">Contratos</a>{% icone "chevron-right" 14 %}<span class="atual">{{ obj.numero }}</span>{% endblock %}
+{% block h1 %}Contrato {{ obj.numero }}{% endblock %}
+{% block subtitulo %}<p class="sub">{{ obj.cliente }} · {{ obj.get_modalidade_display }} · {% badge_obj obj %}</p>{% endblock %}
+{% block acoes %}
+{% if pode_escrever %}
+<div class="dropdown"><button class="btn" type="button" data-dropdown>{% icone "plus" 16 %} Adicionar {% icone "chevron-down" 14 %}</button>
+  <div class="dropdown-menu hidden">
+    <a href="{% url 'contratos:aditivo_novo' %}?contrato={{ obj.pk }}&voltar={{ request.path }}">Aditivo</a>
+    <a href="{% url 'contratos:empenho_novo' %}?contrato={{ obj.pk }}&voltar={{ request.path }}">Empenho</a>
+    <a href="{% url 'contratos:item_novo' %}?contrato={{ obj.pk }}&voltar={{ request.path }}">Item</a>
+    {% block menu_adicionar %}{% for a in acoes_contrato %}<a href="{{ a.href }}">{{ a.rotulo }}</a>{% endfor %}{% endblock %}
+  </div></div>
+<a class="btn" href="{{ url_editar }}">{% icone "edit" 16 %} Editar</a>
+{% endif %}
+{% endblock %}
+{% block conteudo %}
+{% for a in alertas %}<div class="alerta {{ a.nivel }}">{% icone "alert" 18 %} {{ a.texto }}</div>{% endfor %}
+<div class="grid g-4" style="margin-bottom:16px">
+  {% kpi_card "Valor atualizado" obj.valor_atualizado icone_nome="file-text" %}
+  {% kpi_card "Faturado" obj.total_faturado icone_nome="receipt" %}
+  {% kpi_card "Saldo" obj.saldo alerta=saldo_baixo icone_nome="wallet" %}
+  {% kpi_card "Dias para o fim" obj.dias_para_fim formato="int" alerta=fim_proximo icone_nome="calendar" %}
+</div>
+<div class="card" style="margin-bottom:16px;padding:14px 20px">
+  <div class="linha entre small"><span>Execução: <strong class="mono">{{ obj.percentual_executado|pct }}</strong></span><span class="muted">Vigência {{ obj.vigencia_inicio|data_br }} → {{ obj.vigencia_fim_atual|data_br }}</span></div>
+  <div class="progresso {% if obj.percentual_executado > 80 %}bad{% elif obj.percentual_executado > 60 %}warn{% endif %}" style="margin-top:8px"><span style="width:{{ obj.percentual_executado|floatformat:0 }}%"></span></div>
+</div>
+<nav class="abas" aria-label="Seções do contrato">
+  {% for slug, rotulo in abas %}<a href="?aba={{ slug }}" class="{% if aba == slug %}ativa{% endif %}" {% if aba == slug %}aria-current="page"{% endif %}>{{ rotulo }}</a>{% endfor %}
+</nav>
+{% if aba == "resumo" %}{% include "contratos/_aba_resumo.html" %}
+{% elif aba == "historico" %}<div class="card">{% include "components/timeline.html" with eventos=historico %}</div>
+{% elif aba == "documentos" %}
+<div class="card">
+  {% for a in anexos %}<div class="linha entre" style="padding:8px 0;border-bottom:1px solid var(--line)"><a href="{% url 'core:anexo_baixar' a.pk %}">{% icone "download" 14 %} {{ a.nome }}</a><span class="muted small">{{ a.criado_em|data_br }} · {{ a.tamanho|filesizeformat }}</span></div>{% empty %}{% empty_state "Nenhum documento anexado ao contrato." %}{% endfor %}
+  {% if pode_escrever %}<form method="post" action="{{ url_anexo }}" enctype="multipart/form-data" class="linha" style="margin-top:14px">{% csrf_token %}<input class="input" style="max-width:380px" type="file" name="arquivo" multiple required aria-label="Arquivo"><button class="btn" type="submit">{% icone "upload" 16 %} Enviar</button></form>{% endif %}
+</div>
+{% elif aba_template %}{% include aba_template %}
+{% else %}<div class="card">{% empty_state "Este módulo ainda não tem dados para o contrato." %}</div>{% endif %}
+{% endblock %}

@@ -13,6 +13,8 @@ urlpatterns = [
     path("conta/senha/ok/", auth_views.PasswordChangeDoneView.as_view(), name="password_change_done"),
     path("", include("apps.core.urls")),
     path("cadastros/", include("apps.cadastros.urls")),
+    path("contratos/", include("apps.contratos.urls")),
+    path("certidoes/", include("apps.certidoes.urls")),
     path("", include("apps.painel.urls")),
 ]
 if settings.DEBUG:

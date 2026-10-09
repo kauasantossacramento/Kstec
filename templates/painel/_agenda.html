@@ -1,0 +1,7 @@
+<section class="card">
+  <div class="card-cab"><h3>Agenda — próximos 15 dias</h3><a class="small" href="{% url 'painel:agenda' %}">Ver tudo</a></div>
+  {% for e in agenda %}
+  <div class="agenda-dia"><div class="data"><div class="d">{{ e.data|date:"d" }}</div><div class="m">{{ e.data|date:"M" }}</div></div>
+    <div><a href="{{ e.link }}"><strong>{{ e.titulo }}</strong></a><div class="small muted">{% status_badge e.nivel|upper rotulo=e.tipo|title %} {{ e.detalhe }}</div></div></div>
+  {% empty %}<p class="muted small">Nenhuma obrigação nos próximos 15 dias.</p>{% endfor %}
+</section>

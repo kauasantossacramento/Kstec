@@ -1,0 +1,2 @@
+{% extends "crud/form.html" %}
+{% block form_topo %}{% if request.GET.voltar %}<input type="hidden" name="_proximo" value="{{ request.GET.voltar }}">{% endif %}{% endblock %}

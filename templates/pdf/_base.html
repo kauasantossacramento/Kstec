@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="pt-BR"><head><meta charset="utf-8">
+<style>
+  @page { size: A4; margin: 22mm 16mm 20mm; @bottom-left { content: "{{ rodape|default:'KS TEC Soluções de Tecnologia LTDA · CNPJ 62.501.281/0001-13' }}"; font: 8pt sans-serif; color: #5b6478; } @bottom-right { content: "Página " counter(page) " de " counter(pages); font: 8pt sans-serif; color: #5b6478; } }
+  body { font-family: "Manrope", "DejaVu Sans", sans-serif; font-size: 10pt; color: #0B1729; line-height: 1.45; }
+  h1 { font-size: 18pt; margin: 0 0 4pt; color: #061534; } h2 { font-size: 13pt; color: #061534; border-bottom: 2px solid #0016E1; padding-bottom: 3pt; margin-top: 18pt; } h3 { font-size: 11pt; margin: 12pt 0 4pt; }
+  .cab { display: flex; justify-content: space-between; align-items: center; border-bottom: 3px solid #061534; padding-bottom: 8pt; margin-bottom: 14pt; }
+  .cab img { height: 34pt; }
+  .muted { color: #5b6478; } .mono { font-family: "DejaVu Sans Mono", monospace; }
+  table { width: 100%; border-collapse: collapse; margin: 6pt 0; } th { background: #EEF2F8; text-align: left; font-size: 8.5pt; text-transform: uppercase; color: #5b6478; }
+  th, td { padding: 5pt 6pt; border-bottom: 1px solid #E6EAF1; vertical-align: top; } td.num, th.num { text-align: right; font-family: "DejaVu Sans Mono", monospace; }
+  tfoot td { font-weight: bold; background: #F4F6FA; }
+  .ok { color: #16A34A; font-weight: bold; } .bad { color: #DC2626; font-weight: bold; } .warn { color: #B45309; font-weight: bold; }
+  .caixa { border: 1px solid #D6DCE7; border-radius: 6pt; padding: 8pt 10pt; margin: 8pt 0; background: #F4F6FA; }
+  .assinatura { margin-top: 40pt; text-align: center; } .assinatura .linha { border-top: 1px solid #0B1729; width: 60%; margin: 0 auto 4pt; }
+  .hash { font: 7pt "DejaVu Sans Mono", monospace; color: #8892a4; word-break: break-all; margin-top: 16pt; }
+  {% block estilo %}{% endblock %}
+</style></head>
+<body>
+<div class="cab"><img src="{{ logo }}" alt="KS TEC"><div style="text-align:right"><strong>{% block titulo_cab %}{% endblock %}</strong><br><span class="muted">{% block sub_cab %}{% endblock %}</span></div></div>
+{% block conteudo %}{% endblock %}
+</body></html>

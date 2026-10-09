@@ -54,7 +54,7 @@ class Crud:
     anexos: bool = True
     por_pagina: int = 25
     feminino: bool = False
-    caminho: str = ""  # segmento de URL; padrão: prefixo + "s"
+    caminho: str | None = None  # segmento de URL; padrão: prefixo + "s"; "" = raiz do app
     conversor: str = "uuid"
 
     def __post_init__(self):
@@ -83,14 +83,15 @@ class Crud:
 
     def urls(self, lista=None, novo=None, detalhe=None, editar=None):
         p = self.prefixo
-        b = self.caminho or f"{p}s"
+        b = f"{p}s" if self.caminho is None else self.caminho
+        b = f"{b}/" if b else ""
         cv = self.conversor
         return [
-            path(f"{b}/", (lista or ListaGenerica).as_view(crud=self), name=f"{p}_lista"),
-            path(f"{b}/novo/", (novo or CriarGenerico).as_view(crud=self), name=self.nome_novo),
-            path(f"{b}/<{cv}:pk>/", (detalhe or DetalheGenerico).as_view(crud=self), name=f"{p}_detalhe"),
-            path(f"{b}/<{cv}:pk>/editar/", (editar or EditarGenerico).as_view(crud=self), name=f"{p}_editar"),
-            path(f"{b}/<{cv}:pk>/anexo/", AnexoUpload.as_view(crud=self), name=f"{p}_anexo"),
+            path(f"{b}", (lista or ListaGenerica).as_view(crud=self), name=f"{p}_lista"),
+            path(f"{b}novo/", (novo or CriarGenerico).as_view(crud=self), name=self.nome_novo),
+            path(f"{b}<{cv}:pk>/", (detalhe or DetalheGenerico).as_view(crud=self), name=f"{p}_detalhe"),
+            path(f"{b}<{cv}:pk>/editar/", (editar or EditarGenerico).as_view(crud=self), name=f"{p}_editar"),
+            path(f"{b}<{cv}:pk>/anexo/", AnexoUpload.as_view(crud=self), name=f"{p}_anexo"),
         ]
 
 

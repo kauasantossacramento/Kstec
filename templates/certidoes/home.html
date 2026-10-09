@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block titulo %}Certidões{% endblock %}
+{% block breadcrumb %}{% icone "chevron-right" 14 %}<span class="atual">Certidões</span>{% endblock %}
+{% block h1 %}Situação de habilitação{% endblock %}
+{% block subtitulo %}<p class="sub">Semáforo das certidões exigidas em licitações e pagamentos públicos.</p>{% endblock %}
+{% block acoes %}
+<a class="btn" href="{% url 'certidoes:certidao_lista' %}">Todas as certidões</a>
+<a class="btn" href="{% url 'certidoes:kit_lista' %}">{% icone "zip" 16 %} Kits</a>
+{% if pode_escrever %}<a class="btn btn-primario btn-pill" href="{% url 'certidoes:certidao_nova' %}">{% icone "upload" 16 %} Nova certidão</a>{% endif %}
+{% endblock %}
+{% block conteudo %}
+<div class="card" style="margin-bottom:16px">
+  <div class="linha entre">
+    <div><span class="muted small">Indicador geral</span><div style="font-size:28px;font-weight:800">{% status_badge situacao.geral "Habilitacao" situacao.geral %}</div></div>
+    <p class="muted small" style="max-width:520px;margin:0">APTA: todas as obrigatórias válidas · ATENÇÃO: alguma vence em até 15 dias · INAPTA: alguma obrigatória vencida, positiva ou ausente.</p>
+  </div>
+</div>
+<div class="tabela-wrap responsiva">
+<table class="tabela">
+  <thead><tr><th>Certidão</th><th>Órgão</th><th>Validade</th><th>Dias</th><th>Status</th><th>Obrigatória</th><th></th></tr></thead>
+  <tbody>
+  {% for l in situacao.linhas %}
+  <tr>
+    <td data-rotulo="Certidão"><strong>{{ l.tipo.nome }}</strong></td>
+    <td data-rotulo="Órgão">{{ l.tipo.orgao_emissor }}</td>
+    <td data-rotulo="Validade">{% if l.certidao %}<a href="{% url 'certidoes:certidao_detalhe' l.certidao.pk %}">{{ l.certidao.data_validade|data_br }}</a>{% else %}—{% endif %}</td>
+    <td data-rotulo="Dias" class="mono">{{ l.certidao.dias_restantes|default_if_none:"—" }}</td>
+    <td data-rotulo="Status">{% if l.status == "AUSENTE" %}{% status_badge "VENCIDA" "Certidao" "Ausente" %}{% else %}{% status_badge l.status "Certidao" %}{% endif %}</td>
+    <td data-rotulo="Obrigatória">{{ l.tipo.obrigatoria_habilitacao|yesno:"Sim,Não" }}</td>
+    <td>{% if l.tipo.url_emissao %}<a class="btn btn-sm" href="{{ l.tipo.url_emissao }}" target="_blank" rel="noopener">{% icone "link" 14 %} Emitir nova</a>{% endif %}
+        {% if pode_escrever %}<a class="btn btn-sm btn-fantasma" href="{% url 'certidoes:certidao_nova' %}?tipo={{ l.tipo.pk }}">{% icone "upload" 14 %} Enviar</a>{% endif %}</td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endblock %}

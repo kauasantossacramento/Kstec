@@ -1,0 +1,11 @@
+{% extends "crud/detalhe.html" %}
+{% block acoes_extra %}{% if pode_escrever %}<form method="post" action="{% url 'certidoes:kit_gerar' obj.pk %}">{% csrf_token %}<button class="btn btn-primario btn-pill" type="submit">{% icone "zip" 16 %} Gerar ZIP</button></form>{% endif %}{% if obj.zip %}<a class="btn" href="{% url 'core:anexo_baixar' obj.zip.pk %}">{% icone "download" 16 %} Baixar kit</a>{% endif %}{% endblock %}
+{% block principal %}
+<section class="card">
+  <h3>Certidões do kit</h3>
+  <table class="tabela"><thead><tr><th>Certidão</th><th>Validade</th><th>Status</th></tr></thead><tbody>
+  {% for c in certs %}<tr><td>{{ c.tipo.nome }}</td><td>{{ c.data_validade|data_br }}</td><td>{% status_badge c.status "Certidao" %}{% if c.status == "VENCIDA" %} <span class="small erro-texto">não entra no ZIP</span>{% endif %}</td></tr>{% empty %}<tr><td colspan="3" class="muted">Nenhuma certidão selecionada.</td></tr>{% endfor %}
+  </tbody></table>
+  <p class="small muted" style="margin-top:10px">Documentos extras (contrato social, cartão CNPJ, atestados): envie-os como anexo neste kit e eles entram no ZIP.</p>
+</section>
+{% endblock %}

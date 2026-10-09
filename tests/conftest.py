@@ -45,3 +45,18 @@ def pessoa(empresa):
     return Pessoa.objects.create(cpf_cnpj="13927819000140", razao_social="MUNICIPIO DE VALENCA",
                                  e_orgao_publico=True, esfera="MUNICIPAL", endereco=end,
                                  email="financas@valenca.ba.gov.br")
+
+
+@pytest.fixture
+def contrato(empresa, pessoa):
+    from datetime import date
+    from decimal import Decimal
+
+    from apps.contratos.models import Contrato
+
+    return Contrato.objects.create(
+        numero="012/2026", objeto="Manutenção e suporte do sistema de protocolo", cliente=pessoa,
+        data_assinatura=date(2026, 1, 5), vigencia_inicio=date(2026, 1, 1), vigencia_fim=date(2026, 12, 31),
+        valor_global=Decimal("60000.00"), valor_mensal=Decimal("5000.00"),
+        discriminacao_padrao="Serviços de suporte — competência {competencia} — contrato {contrato}",
+    )

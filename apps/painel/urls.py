@@ -6,4 +6,5 @@ app_name = "painel"
 
 urlpatterns = [
     path("", views.home, name="home"),
+    path("agenda/", views.agenda, name="agenda"),
 ]

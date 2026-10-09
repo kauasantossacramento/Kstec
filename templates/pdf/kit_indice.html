@@ -1,0 +1,12 @@
+{% extends "pdf/_base.html" %}
+{% block titulo_cab %}Kit de habilitação{% endblock %}
+{% block sub_cab %}Gerado em {{ gerado_em|data_br }}{% endblock %}
+{% block conteudo %}
+<h1>{{ kit.nome }}</h1>
+<p class="muted">{{ empresa.razao_social }} · CNPJ {{ empresa.cnpj_formatado }}</p>
+<h2>Certidões</h2>
+<table><thead><tr><th>#</th><th>Certidão</th><th>Órgão</th><th>Nº / controle</th><th>Emissão</th><th>Validade</th><th>Situação</th></tr></thead>
+<tbody>{% for c in certidoes %}<tr><td>{{ forloop.counter }}</td><td>{{ c.tipo.nome }}</td><td>{{ c.tipo.orgao_emissor }}</td><td class="mono">{{ c.numero|default:"—" }}</td><td>{{ c.data_emissao|data_br }}</td><td>{{ c.data_validade|data_br }}</td><td class="{% if c.status == 'VENCIDA' %}bad{% elif c.status == 'VENCENDO' %}warn{% else %}ok{% endif %}">{{ c.get_status_display }}</td></tr>{% endfor %}</tbody></table>
+{% if extras %}<h2>Documentos complementares</h2><table><tbody>{% for a in extras %}<tr><td>{{ forloop.counter }}</td><td>{{ a.nome }}</td><td class="muted">{{ a.descricao }}</td></tr>{% endfor %}</tbody></table>{% endif %}
+{% if avisos %}<div class="caixa"><strong>Avisos:</strong><ul>{% for a in avisos %}<li>{{ a }}</li>{% endfor %}</ul></div>{% endif %}
+{% endblock %}

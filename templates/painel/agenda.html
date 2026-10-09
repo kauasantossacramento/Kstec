@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block titulo %}Agenda de obrigações{% endblock %}
+{% block breadcrumb %}{% icone "chevron-right" 14 %}<span class="atual">Agenda</span>{% endblock %}
+{% block h1 %}Agenda de obrigações{% endblock %}
+{% block subtitulo %}<p class="sub">Certidões, vigências, DAM de ISS, parcelas, SSL e relatórios num calendário único.</p>{% endblock %}
+{% block conteudo %}
+<div class="filtros">
+  <a class="chip{% if not tipo %} ativo{% endif %}" href="?dias={{ dias }}">Todos</a>
+  {% for t in tipos %}<a class="chip{% if tipo == t %} ativo{% endif %}" href="?dias={{ dias }}&tipo={{ t }}">{{ t|title }}</a>{% endfor %}
+  <span style="flex:1"></span>
+  <a class="chip{% if dias == 30 %} ativo{% endif %}" href="?dias=30{% if tipo %}&tipo={{ tipo }}{% endif %}">30 dias</a>
+  <a class="chip{% if dias == 60 %} ativo{% endif %}" href="?dias=60{% if tipo %}&tipo={{ tipo }}{% endif %}">60 dias</a>
+  <a class="chip{% if dias == 180 %} ativo{% endif %}" href="?dias=180{% if tipo %}&tipo={{ tipo }}{% endif %}">180 dias</a>
+</div>
+<div class="card">
+  {% for e in eventos %}
+  {% ifchanged e.data|date:"F Y" %}<h3 style="margin-top:12px">{{ e.data|date:"F \d\e Y"|capfirst }}</h3>{% endifchanged %}
+  <div class="agenda-dia"{% if e.data < hoje %} style="opacity:.6"{% endif %}><div class="data"><div class="d">{{ e.data|date:"d" }}</div><div class="m">{{ e.data|date:"D" }}</div></div>
+    <div><a href="{{ e.link }}"><strong>{{ e.titulo }}</strong></a><div class="small muted">{% status_badge e.nivel|upper rotulo=e.tipo|title %} {{ e.detalhe }}</div></div></div>
+  {% empty %}{% empty_state "Nenhuma obrigação no período." %}{% endfor %}
+</div>
+{% endblock %}

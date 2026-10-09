@@ -1,0 +1,12 @@
+<section class="card">
+  <div class="card-cab"><h3>Precisa da sua atenção</h3><span class="badge badge-neutral">{{ atencao|length }}</span></div>
+  {% if atencao %}
+  <ul class="atencao-lista">
+    {% for i in atencao %}
+    <li><span class="badge badge-{{ i.nivel }}" style="padding:6px">{% icone i.icone 14 %}</span>
+      <div class="txt"><a href="{{ i.link }}"><strong>{{ i.titulo }}</strong></a>{% if i.detalhe %}<div class="small muted">{{ i.detalhe }}</div>{% endif %}</div>
+      {% icone "chevron-right" 16 "muted" %}</li>
+    {% endfor %}
+  </ul>
+  {% else %}<p class="muted">{% icone "check" 16 %} Tudo em dia.</p>{% endif %}
+</section>
