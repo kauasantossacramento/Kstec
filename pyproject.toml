@@ -1,0 +1,29 @@
+[project]
+name = "kscentral"
+version = "1.0.0"
+description = "KS CENTRAL — Sistema de Gestão Integrada da KS TEC Soluções de Tecnologia LTDA"
+requires-python = ">=3.12"
+readme = "README.md"
+
+[tool.ruff]
+line-length = 110
+target-version = "py312"
+extend-exclude = ["**/migrations/*", ".venv"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "DJ"]
+ignore = ["E501", "DJ001", "DJ008", "B904"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["apps", "config"]
+
+[tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE = "config.settings.test"
+python_files = ["test_*.py", "tests.py"]
+addopts = "-q --reuse-db"
+testpaths = ["tests", "apps"]
+filterwarnings = ["ignore::DeprecationWarning"]
+
+[tool.coverage.run]
+source = ["apps"]
+omit = ["*/migrations/*", "*/tests/*"]
