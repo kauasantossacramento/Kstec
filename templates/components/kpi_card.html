@@ -1,0 +1,8 @@
+<div class="card kpi{% if alerta %} alerta{% endif %}">
+  <span class="rotulo">{% if icone %}{% icone icone 16 %}{% endif %}{{ rotulo }}</span>
+  <span class="valor">{% if link %}<a href="{{ link }}" style="color:inherit">{{ valor }}</a>{% else %}{{ valor }}{% endif %}</span>
+  {% if variacao is not None %}
+  <span class="var {% if variacao >= 0 %}pos{% else %}neg{% endif %}">{% if variacao >= 0 %}{% icone "trending-up" 14 %}{% else %}{% icone "trending-down" 14 %}{% endif %}{{ variacao|pct }} vs. mês anterior</span>
+  {% endif %}
+  {% if serie %}{{ serie }}{% endif %}
+</div>

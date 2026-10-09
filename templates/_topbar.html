@@ -1,0 +1,32 @@
+<header class="topbar">
+  <button class="icone-btn menu-mobile" type="button" data-abrir-menu aria-label="Abrir menu">{% icone "menu" 22 %}</button>
+  <nav class="breadcrumb" aria-label="Você está em">
+    <a href="{% url 'painel:home' %}">Início</a>
+    {% block breadcrumb %}{% endblock %}
+  </nav>
+  <div class="espaco"></div>
+  <button class="busca-gatilho" type="button" data-abrir-busca aria-label="Busca global">
+    {% icone "search" 16 %}<span class="txt">Buscar…</span><kbd>Ctrl K</kbd>
+  </button>
+  {% if menu_novo %}
+  <div class="dropdown">
+    <button class="btn btn-primario btn-pill btn-sm" id="botao-novo" type="button" data-dropdown aria-haspopup="true">{% icone "plus" 16 %}<span>Novo</span></button>
+    <div class="dropdown-menu hidden" role="menu">
+      {% for n in menu_novo %}<a href="{{ n.href }}" role="menuitem">{{ n.rotulo }}</a>{% endfor %}
+    </div>
+  </div>
+  {% endif %}
+  <a class="icone-btn" href="{% url 'core:notificacoes' %}" aria-label="Notificações ({{ notificacoes_nao_lidas }} não lidas)">
+    {% icone "bell" 20 %}{% if notificacoes_nao_lidas %}<span class="contador">{{ notificacoes_nao_lidas }}</span>{% endif %}
+  </a>
+  <div class="dropdown">
+    <button class="avatar" type="button" data-dropdown aria-label="Menu do usuário">{{ request.user.iniciais }}</button>
+    <div class="dropdown-menu hidden">
+      <div class="small" style="padding:8px 10px"><strong>{{ request.user }}</strong><br><span class="muted">{{ request.user.papeis|join:", "|default:"Sem papel" }}</span></div>
+      <hr style="margin:4px 0">
+      <a href="{% url 'core:perfil' %}">{% icone "settings" 16 %} Meu perfil</a>
+      <button type="button" data-alternar-tema="{% url 'core:tema' %}">{% icone "moon" 16 %} Alternar tema</button>
+      <form method="post" action="{% url 'core:logout' %}">{% csrf_token %}<button type="submit">{% icone "log-out" 16 %} Sair</button></form>
+    </div>
+  </div>
+</header>

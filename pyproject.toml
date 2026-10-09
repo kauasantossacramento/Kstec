@@ -12,7 +12,7 @@ extend-exclude = ["**/migrations/*", ".venv"]
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "B", "UP", "DJ"]
-ignore = ["E501", "DJ001", "DJ008", "B904"]
+ignore = ["E501", "DJ001", "DJ008", "DJ012", "B904"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["apps", "config"]

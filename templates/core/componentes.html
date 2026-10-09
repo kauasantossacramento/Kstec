@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% block titulo %}Design system{% endblock %}
+{% block breadcrumb %}{% icone "chevron-right" 14 %}<span class="atual">Componentes</span>{% endblock %}
+{% block h1 %}Catálogo de componentes{% endblock %}
+{% block subtitulo %}<p class="sub">Referência viva do design system KS CENTRAL (plano, seção 4).</p>{% endblock %}
+{% block acoes %}<button class="btn" type="button" data-alternar-tema="{% url 'core:tema' %}">{% icone "moon" 16 %} Alternar tema</button><a class="btn btn-primario btn-pill" href="#">{% icone "plus" 16 %} Ação primária</a>{% endblock %}
+{% block conteudo %}
+<div class="stack">
+  <section>
+    <h2>kpi_card</h2>
+    <div class="grid g-4">
+      {% kpi_card "Faturado no mês" 48250.75 12.4 icone_nome="receipt" %}
+      {% kpi_card "A receber vencido" 3120.00 -4.1 alerta=True icone_nome="wallet" %}
+      {% kpi_card "Resultado do mês" 21980.10 icone_nome="trending-up" %}
+      {% kpi_card "Disponibilidade (30d)" 99.82 formato="pct" icone_nome="activity" %}
+    </div>
+  </section>
+  <section class="card">
+    <h2>status_badge</h2>
+    <div class="linha">{% for s in status_nota %}{% status_badge s "NotaFiscal" %}{% endfor %}</div>
+  </section>
+  <section class="card">
+    <h2>Botões</h2>
+    <div class="linha">
+      <button class="btn btn-primario">Primário</button><button class="btn">Contorno</button>
+      <button class="btn btn-fantasma">Fantasma</button><button class="btn btn-perigo">Destrutivo</button>
+      <button class="btn btn-primario btn-pill">Pill (CTA)</button><button class="btn" disabled>Desabilitado</button>
+    </div>
+  </section>
+  <section class="card">
+    <h2>money_input · doc_input</h2>
+    <div class="form-grid">
+      <div class="campo"><label>Valor</label><input class="input mono num" data-mask="money" value="1234.5" inputmode="decimal"></div>
+      <div class="campo"><label>CPF/CNPJ</label><input class="input mono" data-mask="doc" value="62501281000113"></div>
+    </div>
+  </section>
+  <section class="card">
+    <h2>stepper</h2>
+    <div class="stepper"><div class="passo feito">Tomador e serviço</div><div class="passo ativo">Valores</div><div class="passo">Revisão e transmissão</div></div>
+  </section>
+  <section class="card">
+    <h2>uptime_bar</h2>
+    {% uptime_bar dias %}
+  </section>
+  <section class="card">
+    <h2>timeline</h2>
+    {% include "components/timeline.html" with eventos=None %}
+  </section>
+  <section class="card">
+    <h2>modal_confirm</h2>
+    <form data-confirmar="A nota será cancelada na prefeitura. Essa ação não pode ser desfeita." data-confirmar-titulo="Cancelar NFS-e 123" data-confirmar-digitar="123" data-confirmar-botao="Cancelar nota" method="get">
+      <button class="btn btn-perigo" type="submit">Cancelar NFS-e 123</button>
+    </form>
+  </section>
+  <section class="card">
+    <h2>diff_view</h2>
+    <div class="diff"><div class="lado">foi feito ajuste no sistema de protocolo dia 03/10, chamado 4512</div><div class="lado novo">A KS TEC realizou, em 03/10, ajuste no sistema de protocolo, conforme chamado nº 4512.</div></div>
+  </section>
+  <section class="card">
+    <h2>empty_state</h2>
+    {% empty_state "Nenhuma nota emitida nesta competência." "#" "Emitir nota" %}
+  </section>
+  <section class="card">
+    <h2>alertas</h2>
+    <div class="alerta">{% icone "info" 18 %} Informação.</div>
+    <div class="alerta warning">{% icone "alert" 18 %} Canal E&amp;L selecionado para competência ≥ 01/2026.</div>
+    <div class="alerta danger">{% icone "alert" 18 %} Certidão vencida.</div>
+    <div class="alerta success">{% icone "check" 18 %} Nota autorizada.</div>
+  </section>
+</div>
+{% endblock %}

@@ -1,0 +1,6 @@
+{% for g in grupos %}
+<div class="grupo">{{ g.rotulo }}</div>
+{% for i in g.itens %}<a href="{{ i.url }}"><strong>{{ i.titulo }}</strong>{% if i.subtitulo %} <span class="muted small">· {{ i.subtitulo }}</span>{% endif %}</a>{% endfor %}
+{% empty %}
+<p class="muted small" style="padding:10px 12px">{% if q|length < 2 %}Digite ao menos 2 caracteres.{% else %}Nada encontrado para “{{ q }}”.{% endif %}</p>
+{% endfor %}

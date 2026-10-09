@@ -1,0 +1,11 @@
+{% if eventos %}
+<ul class="timeline">
+  {% for h in eventos %}
+  <li>
+    <div class="quando">{{ h.data|data_br }} · {{ h.usuario|default:"sistema" }}</div>
+    <div><strong>{% if h.tipo == "+" %}Criado{% elif h.tipo == "-" %}Excluído{% elif h.tipo == "~" %}Alterado{% else %}{{ h.titulo }}{% endif %}</strong>{% if h.descricao %} — {{ h.descricao }}{% endif %}</div>
+    {% for m in h.mudancas %}<div class="mud"><code>{{ m.campo }}</code>: {{ m.de|default:"∅"|truncatechars:40 }} → {{ m.para|default:"∅"|truncatechars:40 }}</div>{% endfor %}
+  </li>
+  {% endfor %}
+</ul>
+{% else %}<p class="muted small">Sem eventos.</p>{% endif %}

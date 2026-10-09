@@ -1,0 +1,57 @@
+/* KS CENTRAL — Design tokens (plano, seção 4.2). Identidade extraída de kstec.online. */
+:root {
+  /* Marca */
+  --brand:        #0016E1;   /* cor exata da logo — símbolo, foco, links ativos */
+  --primary:      #1E5BFF;   /* botões primários (site) */
+  --primary-600:  #1747d6;
+  --primary-400:  #4f7bff;
+  --primary-50:   #EEF3FF;
+  --accent:       #22D3EE;   /* ciano — destaques de dado, gráficos secundários */
+  --accent-300:   #67E3F2;
+  --gold:         #F5B642;   /* premium / atenção suave */
+
+  /* Navy (sidebar, cabeçalhos de relatório) */
+  --navy-900: #061534; --navy-800: #0A1E3F; --navy-700: #122a55; --navy-600: #1c3a6e;
+
+  /* Neutros */
+  --ink: #0B1729; --ink-2: #1f2a3d; --muted: #5b6478; --muted-2: #8892a4;
+  --line: #E6EAF1; --line-2: #D6DCE7;
+  --bg: #FFFFFF; --bg-soft: #F4F6FA; --bg-soft-2: #EEF2F8;
+
+  /* Semânticas */
+  --success: #16A34A; --success-bg: #E8F7EE;
+  --warning: #B45309; --warning-bg: #FFF6E5;
+  --danger:  #DC2626; --danger-bg:  #FDECEC;
+  --info:    var(--primary); --info-bg: var(--primary-50);
+  --neutral: #5b6478; --neutral-bg: #EEF2F8;
+
+  /* Forma */
+  --r-sm: 10px; --r-md: 14px; --r-lg: 20px; --r-xl: 28px; --r-pill: 999px;
+  --shadow-1: 0 1px 2px rgba(11,23,41,.04), 0 4px 14px rgba(11,23,41,.06);
+  --shadow-2: 0 6px 18px rgba(11,23,41,.07), 0 20px 40px rgba(11,23,41,.10);
+  --shadow-blue: 0 12px 30px -10px rgba(30,91,255,.55);
+
+  /* Tipografia */
+  --font-ui:   "Manrope", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", monospace;
+  --fs-xs: 12px; --fs-sm: 13px; --fs-base: 14px; --fs-md: 16px;
+  --fs-lg: 20px; --fs-xl: 24px; --fs-2xl: 32px;
+
+  /* Layout */
+  --sidebar-w: 264px; --sidebar-w-collapsed: 76px; --topbar-h: 64px;
+  --content-max: 1360px;
+  --card: #FFFFFF;
+  color-scheme: light;
+}
+
+/* Tema escuro (Fase 9) */
+:root[data-theme="dark"] {
+  --bg: #061534; --bg-soft: #0A1E3F; --bg-soft-2: #122a55;
+  --ink: #EAF0FB; --ink-2: #C9D3E6; --muted: #97A6C5; --muted-2: #7E8BA6;
+  --line: #1c3a6e; --line-2: #24467F;
+  --card: #0d2348;
+  --primary-50: #13306a;
+  --success-bg: #0f3a2a; --warning-bg: #3a2c0f; --danger-bg: #3e1620; --neutral-bg: #17305c;
+  --success: #4ADE80; --warning: #FBBF24; --danger: #F87171; --neutral: #A9B6D1; --info: #7FA2FF;
+  color-scheme: dark;
+}

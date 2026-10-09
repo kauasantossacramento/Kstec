@@ -39,6 +39,8 @@ THIRD_PARTY_APPS = [
 ]
 LOCAL_APPS = [
     "apps.core",
+    "apps.cadastros",
+    "apps.painel",
 ]
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
 
@@ -46,7 +48,6 @@ MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
-    "django.middleware.locale.LocaleMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
@@ -54,6 +55,9 @@ MIDDLEWARE = [
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "simple_history.middleware.HistoryRequestMiddleware",
+    "apps.core.middleware.EmpresaMiddleware",
+    "apps.core.middleware.MFAObrigatorioMiddleware",
+    "apps.core.middleware.CSPMiddleware",
     "axes.middleware.AxesMiddleware",
 ]
 
@@ -71,7 +75,9 @@ TEMPLATES = [
                 "django.template.context_processors.request",
                 "django.contrib.auth.context_processors.auth",
                 "django.contrib.messages.context_processors.messages",
+                "apps.core.context_processors.globais",
             ],
+            "builtins": ["apps.core.templatetags.ks"],
         },
     }
 ]
@@ -93,7 +99,9 @@ AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.CommonPasswordValidator"},
     {"NAME": "django.contrib.auth.password_validation.NumericPasswordValidator"},
 ]
-LOGIN_URL = "/admin/login/"
+LOGIN_URL = "core:login"
+LOGIN_REDIRECT_URL = "painel:home"
+LOGOUT_REDIRECT_URL = "core:login"
 
 # Sessões de 8h (seção 12)
 SESSION_COOKIE_AGE = 8 * 60 * 60
@@ -233,7 +241,7 @@ LOGGING = {
     },
     "handlers": {"console": {"class": "logging.StreamHandler", "formatter": "json"}},
     "root": {"handlers": ["console"], "level": LOG_LEVEL},
-    "loggers": {"django.db.backends": {"level": "WARNING"}},
+    "loggers": {"django.db.backends": {"level": "WARNING"}, "axes": {"level": "WARNING"}},
 }
 
 # Sentry

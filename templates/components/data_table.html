@@ -1,0 +1,34 @@
+<div id="tabela-dados">
+{% if object_list %}
+<div class="tabela-wrap responsiva">
+  <table class="tabela">
+    <thead><tr>
+      {% for c in crud.colunas %}
+      <th class="{% if c.tipo == 'brl' or c.tipo == 'pct' %}num{% endif %}" scope="col">
+        <a href="?{{ querystring }}&o={% if ordem == c.campo %}-{% endif %}{{ c.campo }}" hx-get="?{{ querystring }}&o={% if ordem == c.campo %}-{% endif %}{{ c.campo }}&parcial=1" hx-target="#tabela-dados" hx-swap="outerHTML">{{ c.rotulo }}</a>
+      </th>
+      {% endfor %}
+    </tr></thead>
+    <tbody>
+    {% for obj in object_list %}
+      <tr class="clicavel" data-href="{% url rota_detalhe obj.pk %}">
+        {% for c in crud.colunas %}<td data-rotulo="{{ c.rotulo }}" class="{% if c.tipo == 'brl' or c.tipo == 'pct' %}num{% endif %}">{% if forloop.first %}<a href="{% url rota_detalhe obj.pk %}">{% include "components/celula.html" %}</a>{% else %}{% include "components/celula.html" %}{% endif %}</td>{% endfor %}
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% if is_paginated %}
+<div class="paginacao">
+  <span>{{ page_obj.start_index }}–{{ page_obj.end_index }} de {{ paginator.count }}</span>
+  <span class="linha">
+    {% if page_obj.has_previous %}<a class="btn btn-sm" href="?{{ querystring }}&page={{ page_obj.previous_page_number }}" hx-get="?{{ querystring }}&page={{ page_obj.previous_page_number }}&parcial=1" hx-target="#tabela-dados" hx-swap="outerHTML" hx-push-url="?{{ querystring }}&page={{ page_obj.previous_page_number }}">Anterior</a>{% endif %}
+    <span>Página {{ page_obj.number }} de {{ paginator.num_pages }}</span>
+    {% if page_obj.has_next %}<a class="btn btn-sm" href="?{{ querystring }}&page={{ page_obj.next_page_number }}" hx-get="?{{ querystring }}&page={{ page_obj.next_page_number }}&parcial=1" hx-target="#tabela-dados" hx-swap="outerHTML" hx-push-url="?{{ querystring }}&page={{ page_obj.next_page_number }}">Próxima</a>{% endif %}
+  </span>
+</div>
+{% endif %}
+{% else %}
+<div class="card">{% if q or querystring %}{% empty_state "Nenhum registro encontrado com esses filtros." %}{% else %}{% empty_state "Nenhum registro cadastrado ainda." url_novo "Adicionar" %}{% endif %}</div>
+{% endif %}
+</div>

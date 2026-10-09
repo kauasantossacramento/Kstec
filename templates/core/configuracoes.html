@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block titulo %}Configurações{% endblock %}
+{% block breadcrumb %}{% icone "chevron-right" 14 %}<span class="atual">Configurações</span>{% endblock %}
+{% block h1 %}Configurações{% endblock %}
+{% block conteudo %}
+<div class="grid g-3">
+  <a class="card" href="{% url 'core:empresa' %}"><h3>{% icone "briefcase" 18 %} Empresa</h3><p class="muted small">Razão social, inscrições, regime tributário.</p></a>
+  {% if request.user.is_superuser or "Administrador" in request.user.papeis %}
+  <a class="card" href="{% url 'core:usuario_lista' %}"><h3>{% icone "users" 18 %} Usuários e papéis</h3><p class="muted small">Acesso, papéis e MFA.</p></a>
+  {% endif %}
+  <a class="card" href="{% url 'core:parametro_lista' %}"><h3>{% icone "settings" 18 %} Parâmetros</h3><p class="muted small">Dias de alerta, limites e regras configuráveis.</p></a>
+  <a class="card" href="{% url 'core:log_lista' %}"><h3>{% icone "activity" 18 %} Logs de integração</h3><p class="muted small">Chamadas à Sefin, E&amp;L, Gemini e APIs públicas.</p></a>
+  {% block mais_config %}{% for c in config_extra %}<a class="card" href="{{ c.href }}"><h3>{% icone c.icone 18 %} {{ c.rotulo }}</h3><p class="muted small">{{ c.descricao }}</p></a>{% endfor %}{% endblock %}
+  <a class="card" href="{% url 'core:componentes' %}"><h3>{% icone "package" 18 %} Design system</h3><p class="muted small">Catálogo vivo de componentes.</p></a>
+  <a class="card" href="/admin/"><h3>{% icone "shield" 18 %} Administração técnica</h3><p class="muted small">Agendamentos (Celery beat) e dados brutos.</p></a>
+</div>
+{% endblock %}

@@ -1,0 +1,13 @@
+{% extends "registration/_auth_base.html" %}
+{% block titulo %}Configurar verificação em duas etapas{% endblock %}
+{% block form %}
+<form method="post" novalidate>
+  {% csrf_token %}
+  <h2>Verificação em duas etapas</h2>
+  <p class="muted">Seu papel exige MFA. Escaneie o QR code com um aplicativo autenticador (Google Authenticator, Aegis, 1Password) e informe o código gerado.</p>
+  <img src="{{ qr }}" alt="QR code para o aplicativo autenticador" width="200" height="200" style="display:block;margin:12px auto;background:#fff;padding:8px;border-radius:12px">
+  <p class="xs muted" style="text-align:center">Ou digite a chave: <code>{{ segredo }}</code></p>
+  {% for campo in form %}{% include "components/campo.html" %}{% endfor %}
+  <button class="btn btn-primario btn-pill" type="submit" style="width:100%;margin-top:18px">Ativar</button>
+</form>
+{% endblock %}

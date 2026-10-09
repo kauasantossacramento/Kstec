@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block titulo %}Meu perfil{% endblock %}
+{% block breadcrumb %}{% icone "chevron-right" 14 %}<span class="atual">Meu perfil</span>{% endblock %}
+{% block h1 %}Meu perfil{% endblock %}
+{% block subtitulo %}<p class="sub">{{ request.user.email }} · {{ request.user.papeis|join:", "|default:"sem papel" }}</p>{% endblock %}
+{% block conteudo %}
+<div class="grid g-2-1">
+  <form method="post" class="card">{% csrf_token %}
+    {% include "components/form_campos.html" %}
+    <div class="form-acoes"><button class="btn btn-primario" type="submit">Salvar</button></div>
+  </form>
+  <div class="card">
+    <h3>Segurança</h3>
+    <p>Verificação em duas etapas: {% if mfa %}{% status_badge "OK" rotulo="Ativa" %}{% else %}{% status_badge "PENDENTE" rotulo="Inativa" %}{% endif %}</p>
+    <a class="btn btn-sm" href="{% url 'core:mfa_configurar' %}">{% if mfa %}Reconfigurar{% else %}Ativar{% endif %} MFA</a>
+    <p style="margin-top:12px"><a class="btn btn-sm" href="{% url 'password_change' %}">Trocar senha</a></p>
+  </div>
+</div>
+{% endblock %}

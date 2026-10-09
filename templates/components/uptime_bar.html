@@ -1,0 +1,3 @@
+<div class="uptime" role="img" aria-label="Disponibilidade diária">
+  {% for b in barras %}<span class="{{ b.cor }}" title="{{ b.dia|data_br }}: {% if b.pct is None %}sem dados{% else %}{{ b.pct|pct:2 }}{% endif %}"></span>{% endfor %}
+</div>

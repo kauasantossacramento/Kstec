@@ -1,0 +1,11 @@
+{% extends "registration/_auth_base.html" %}
+{% block titulo %}Verificação em duas etapas{% endblock %}
+{% block form %}
+<form method="post" novalidate>
+  {% csrf_token %}
+  <h2>Código de verificação</h2>
+  <p class="muted">Abra o aplicativo autenticador e digite o código de 6 dígitos.</p>
+  {% for campo in form %}{% include "components/campo.html" %}{% endfor %}
+  <button class="btn btn-primario btn-pill" type="submit" style="width:100%;margin-top:18px">Verificar</button>
+</form>
+{% endblock %}

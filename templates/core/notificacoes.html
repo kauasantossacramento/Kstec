@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block titulo %}Notificações{% endblock %}
+{% block breadcrumb %}{% icone "chevron-right" 14 %}<span class="atual">Notificações</span>{% endblock %}
+{% block h1 %}Notificações{% endblock %}
+{% block acoes %}<form method="post">{% csrf_token %}<button class="btn" type="submit">{% icone "check" 16 %} Marcar todas como lidas</button></form>{% endblock %}
+{% block conteudo %}
+<div class="card">
+  <ul class="atencao-lista">
+  {% for n in notificacoes %}
+    <li>{% status_badge n.nivel|upper rotulo=n.get_nivel_display %}
+      <div class="txt"><a href="{% url 'core:notificacao_abrir' n.pk %}"><strong{% if n.lida_em %} style="font-weight:500"{% endif %}>{{ n.titulo }}</strong></a><div class="small muted">{{ n.mensagem|truncatechars:160 }}</div></div>
+      <span class="small muted">{{ n.criado_em|data_br }}</span></li>
+  {% empty %}<li>{% empty_state "Nenhuma notificação." %}</li>{% endfor %}
+  </ul>
+</div>
+{% endblock %}

@@ -1,0 +1,14 @@
+{% extends "base_publica.html" %}{% load static %}
+{% block corpo %}
+<div class="auth">
+  <section class="lado-marca">
+    <img src="{% static 'img/ks-tec-logo-branca.svg' %}" alt="KS TEC" style="height:44px;align-self:flex-start">
+    <div>
+      <h1>KS CENTRAL</h1>
+      <p style="max-width:440px">Cockpit da KS TEC: contratos, notas fiscais, financeiro, operação, monitoramento e certidões em um só lugar.</p>
+    </div>
+    <p class="small" style="color:#7E8BA6">KS TEC Soluções de Tecnologia LTDA · CNPJ 62.501.281/0001-13 · Valença/BA</p>
+  </section>
+  <section class="lado-form">{% block form %}{% endblock %}</section>
+</div>
+{% endblock %}

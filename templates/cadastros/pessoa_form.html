@@ -1,0 +1,12 @@
+{% extends "crud/form.html" %}
+{% block campos %}
+{% if form.non_field_errors %}<div class="alerta danger">{% for e in form.non_field_errors %}{{ e }}{% endfor %}</div>{% endif %}
+<p class="small muted" data-status-consulta aria-live="polite"></p>
+<div class="form-grid">
+  {% for campo in form %}
+    {% if campo.name == "cep" %}<div class="secao-form">Endereço</div>{% endif %}
+    {% if campo.name == "eh_cliente" %}<div class="secao-form">Classificação</div>{% endif %}
+    {% include "components/campo.html" %}
+  {% endfor %}
+</div>
+{% endblock %}

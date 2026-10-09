@@ -1,0 +1,24 @@
+{% extends "base_publica.html" %}{% load static %}
+{% block body_attrs %}data-url-busca="{% url 'core:busca' %}" data-url-painel="{% url 'painel:home' %}"{% for i in menu %}{% if i.url == 'contratos:contrato_lista' %} data-url-contratos="{{ i.href }}"{% elif i.url == 'fiscal:nota_lista' %} data-url-fiscal="{{ i.href }}"{% elif i.url == 'operacao:tarefa_lista' %} data-url-tarefas="{{ i.href }}"{% elif i.url == 'financeiro:home' %} data-url-financeiro="{{ i.href }}"{% endif %}{% endfor %}{% endblock %}
+{% block scripts %}<script src="{% static 'vendor/chart-4.4.7.umd.min.js' %}" defer></script>{% endblock %}
+{% block corpo %}
+<div class="shell">
+  {% include "_sidebar.html" %}
+  <div class="principal">
+    {% include "_topbar.html" %}
+    <main class="conteudo" id="conteudo">
+      {% block cabecalho %}
+      <div class="pagina-cab">
+        <div>
+          <h1>{% block h1 %}{% endblock %}</h1>
+          {% block subtitulo %}{% endblock %}
+        </div>
+        <div class="acoes">{% block acoes %}{% endblock %}</div>
+      </div>
+      {% endblock %}
+      {% block conteudo %}{% endblock %}
+    </main>
+  </div>
+</div>
+{% include "components/atalhos.html" %}
+{% endblock %}

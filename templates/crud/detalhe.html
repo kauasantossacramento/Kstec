@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block titulo %}{{ obj }}{% endblock %}
+{% block breadcrumb %}{% icone "chevron-right" 14 %}<a href="{{ url_lista }}">{{ crud.titulo_plural }}</a>{% icone "chevron-right" 14 %}<span class="atual">{{ obj }}</span>{% endblock %}
+{% block h1 %}{{ obj }}{% endblock %}
+{% block subtitulo %}<p class="sub">{{ crud.titulo }}{% if obj.status %} · {% badge_obj obj %}{% endif %}</p>{% endblock %}
+{% block acoes %}{% block acoes_extra %}{% endblock %}{% if pode_escrever and url_editar %}<a class="btn" href="{{ url_editar }}">{% icone "edit" 16 %} Editar</a>{% endif %}{% endblock %}
+{% block conteudo %}
+<div class="grid g-2-1">
+  <div class="stack">
+    {% block principal %}
+    <section class="card">
+      <dl class="defs">
+        {% for c in campos %}
+        <div{% if c.tipo == "TextField" %} style="grid-column:1/-1"{% endif %}><dt>{{ c.rotulo }}</dt><dd>
+          {% if c.tipo == "DecimalField" %}<span class="mono">{{ c.valor|numero }}</span>
+          {% elif c.tipo == "DateField" or c.tipo == "DateTimeField" %}{{ c.valor|data_br }}
+          {% elif c.tipo == "BooleanField" %}{{ c.valor|yesno:"Sim,Não" }}
+          {% elif c.nome == "cpf_cnpj" or c.nome == "cnpj" %}<span class="mono">{{ c.valor|doc }}</span>
+          {% else %}{{ c.valor|default:"—"|linebreaksbr }}{% endif %}
+        </dd></div>
+        {% endfor %}
+      </dl>
+    </section>
+    {% endblock %}
+    {% block extra %}{% endblock %}
+  </div>
+  <aside class="stack">
+    {% block lateral %}{% endblock %}
+    {% if crud.anexos %}
+    <section class="card">
+      <div class="card-cab"><h3>Anexos</h3></div>
+      {% for a in anexos %}
+      <div class="linha entre small" style="padding:6px 0;border-bottom:1px solid var(--line)"><a href="{% url 'core:anexo_baixar' a.pk %}">{% icone "download" 14 %} {{ a.nome }}</a><span class="muted">{{ a.tamanho|filesizeformat }}</span></div>
+      {% empty %}<p class="muted small">Nenhum anexo.</p>{% endfor %}
+      {% if pode_escrever %}
+      <form method="post" action="{{ url_anexo }}" enctype="multipart/form-data" class="stack" style="margin-top:12px">{% csrf_token %}
+        <input class="input" type="file" name="arquivo" multiple required aria-label="Arquivo">
+        <button class="btn btn-sm" type="submit">{% icone "upload" 14 %} Enviar</button>
+      </form>
+      {% endif %}
+    </section>
+    {% endif %}
+    <section class="card">
+      <div class="card-cab"><h3>Histórico</h3></div>
+      {% include "components/timeline.html" with eventos=historico %}
+    </section>
+  </aside>
+</div>
+{% endblock %}

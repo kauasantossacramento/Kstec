@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block titulo %}{% if object %}Editar {{ object }}{% else %}{% if crud.feminino %}Nova{% else %}Novo{% endif %} {{ crud.titulo|lower }}{% endif %}{% endblock %}
+{% block breadcrumb %}{% icone "chevron-right" 14 %}<a href="{{ url_lista }}">{{ crud.titulo_plural }}</a>{% icone "chevron-right" 14 %}<span class="atual">{% if object %}{{ object }}{% else %}{% if crud.feminino %}Nova{% else %}Novo{% endif %}{% endif %}</span>{% endblock %}
+{% block h1 %}{% if object %}Editar {{ crud.titulo|lower }}{% else %}{% if crud.feminino %}Nova{% else %}Novo{% endif %} {{ crud.titulo|lower }}{% endif %}{% endblock %}
+{% block subtitulo %}{% if object %}<p class="sub">{{ object }}</p>{% endif %}{% endblock %}
+{% block conteudo %}
+<form method="post" enctype="multipart/form-data" class="card" novalidate>
+  {% csrf_token %}
+  {% block form_topo %}{% endblock %}
+  {% block campos %}{% include "components/form_campos.html" %}{% endblock %}
+  <div class="form-acoes">
+    <a class="btn" href="{% if object %}{% url rota_detalhe object.pk %}{% else %}{{ url_lista }}{% endif %}">Cancelar</a>
+    <button class="btn btn-primario" type="submit">{% icone "check" 16 %} Salvar</button>
+  </div>
+</form>
+{% endblock %}

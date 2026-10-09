@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block titulo %}{{ crud.titulo_plural }}{% endblock %}
+{% block breadcrumb %}{% icone "chevron-right" 14 %}<span class="atual">{{ crud.titulo_plural }}</span>{% endblock %}
+{% block h1 %}{{ crud.titulo_plural }}{% endblock %}
+{% block subtitulo %}{% if crud.subtitulo %}<p class="sub">{{ crud.subtitulo }}</p>{% endif %}{% endblock %}
+{% block acoes %}{% block acoes_extra %}{% endblock %}{% if pode_escrever and url_novo %}<a class="btn btn-primario btn-pill" href="{{ url_novo }}">{% icone "plus" 16 %} {% if crud.feminino %}Nova{% else %}Novo{% endif %} {{ crud.titulo|lower }}</a>{% endif %}{% endblock %}
+{% block conteudo %}
+{% block antes_lista %}{% endblock %}
+<form class="filtros" method="get" hx-get="" hx-target="#tabela-dados" hx-swap="outerHTML" hx-trigger="input changed delay:300ms from:input[name=q], change from:select" hx-vals='{"parcial": "1"}' hx-push-url="true">
+  {% if crud.busca %}<input class="input busca" type="search" name="q" value="{{ q }}" placeholder="Buscar…" aria-label="Buscar">{% endif %}
+  {% for f in filtros %}
+  <select class="input select" name="{{ f.nome }}" aria-label="{{ f.rotulo }}">
+    <option value="">{{ f.rotulo }}: todos</option>
+    {% for v, r in f.escolhas %}<option value="{{ v }}" {% if f.atual == v|stringformat:"s" %}selected{% endif %}>{{ r }}</option>{% endfor %}
+  </select>
+  {% endfor %}
+  <noscript><button class="btn">Filtrar</button></noscript>
+</form>
+{% include "components/data_table.html" %}
+{% if pode_escrever and url_novo %}<a class="btn btn-primario fab" href="{{ url_novo }}" aria-label="Novo">{% icone "plus" 20 %}</a>{% endif %}
+{% endblock %}

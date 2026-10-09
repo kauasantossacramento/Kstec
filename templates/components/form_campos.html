@@ -1,0 +1,4 @@
+{% if form.non_field_errors %}<div class="alerta danger">{% icone "alert" 18 %}<div>{% for e in form.non_field_errors %}{{ e }}<br>{% endfor %}</div></div>{% endif %}
+<div class="form-grid">
+  {% for campo in form %}{% include "components/campo.html" %}{% endfor %}
+</div>

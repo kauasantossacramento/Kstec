@@ -1,0 +1,13 @@
+{% extends "crud/detalhe.html" %}
+{% block extra %}
+<section class="card">
+  <div class="card-cab"><h3>Contatos</h3>{% if pode_escrever %}<a class="btn btn-sm" href="{% url 'cadastros:contato_novo' %}?pessoa={{ obj.pk }}">{% icone "plus" 14 %} Contato</a>{% endif %}</div>
+  {% if contatos %}
+  <div class="tabela-wrap responsiva"><table class="tabela">
+    <thead><tr><th>Nome</th><th>Cargo</th><th>E-mail</th><th>Telefone</th><th>Relatórios</th></tr></thead>
+    <tbody>{% for c in contatos %}<tr class="clicavel" data-href="{% url 'cadastros:contato_detalhe' c.pk %}"><td data-rotulo="Nome">{{ c.nome }}</td><td data-rotulo="Cargo">{{ c.cargo|default:"—" }}</td><td data-rotulo="E-mail">{{ c.email|default:"—" }}</td><td data-rotulo="Telefone">{{ c.telefone|default:"—" }}</td><td data-rotulo="Relatórios">{{ c.recebe_relatorios|yesno:"Sim,Não" }}</td></tr>{% endfor %}</tbody>
+  </table></div>
+  {% else %}{% empty_state "Nenhum contato cadastrado." %}{% endif %}
+</section>
+{% block abas_pessoa %}{% endblock %}
+{% endblock %}

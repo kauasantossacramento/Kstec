@@ -12,3 +12,13 @@ Registro do que foi entregue em cada fase do roteiro (plano, seção 13) e do qu
 - `scripts/backup.sh` (criptografado, retenção 30+12, rclone), `scripts/restore.sh` (com modo `--teste`), `scripts/deploy.sh`.
 - `/health` com checagem de banco e cache.
 - Usuário customizado (login por e-mail) criado já na fundação para não exigir troca de `AUTH_USER_MODEL` depois.
+
+## Fase 1 — Núcleo, design system e cadastros ✅
+
+- `core`: `ModeloBase` (UUID v7, empresa, carimbos, autor, `simple_history`), Empresa, Usuario (login por e-mail), papéis (Administrador, Financeiro, Fiscal, Operação, Leitura), Endereco, Anexo (SHA-256, retenção legal), Parametro, Segredo (Fernet), Notificacao, LogIntegracao (segredos mascarados), LogAcesso.
+- Segurança: MFA TOTP obrigatório para Administrador/Financeiro/Fiscal (`django-otp`), `django-axes` (5 tentativas/1h), senha mínima de 10 caracteres, sessão de 8h, CSP `script-src 'self'` (htmx e Chart.js vendorizados em `static/vendor/`, sem CDN de scripts).
+- Design system: `static/css/tokens.css` (tokens da seção 4.2), `app.css`, `app.js` (Ctrl+K, atalhos `N`, `G C/F/P/T/R`, `?`, toasts, máscaras BRL/CPF/CNPJ/CEP, confirmação com digitação do número, gráficos). Catálogo vivo em `/_componentes/`.
+- CRUD genérico (`apps/core/crud.py`): lista com busca, filtros, ordenação e paginação HTMX, detalhe com anexos e histórico, formulários estilizados; leitura liberada, escrita por papel.
+- `cadastros`: Pessoa (cliente/órgão/fornecedor) + Contato; consulta automática de CNPJ (BrasilAPI) e CEP (ViaCEP); validação de dígitos.
+- `seed_inicial` cria a empresa KS TEC (CNPJ 62.501.281/0001-13, Valença/BA 2932903), papéis e parâmetros.
+- Logos em SVG provisórios (o PNG oficial não pôde ser baixado do ambiente de desenvolvimento) — ver `static/img/README.md`.

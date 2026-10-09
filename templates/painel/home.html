@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block titulo %}Painel{% endblock %}
+{% block h1 %}Olá, {{ request.user.nome|default:request.user.email }}{% endblock %}
+{% block subtitulo %}<p class="sub">Visão geral da KS TEC.</p>{% endblock %}
+{% block conteudo %}
+<div class="grid g-4">
+  {% kpi_card "Faturado no mês" None icone_nome="receipt" %}
+  {% kpi_card "A receber" None icone_nome="wallet" %}
+  {% kpi_card "Resultado do mês" None icone_nome="trending-up" %}
+  {% kpi_card "Disponibilidade (30d)" None formato="pct" icone_nome="activity" %}
+</div>
+<div class="card" style="margin-top:16px">{% url 'cadastros:pessoa_nova' as url_pessoa %}{% empty_state "Comece cadastrando seus clientes e órgãos públicos." url_pessoa "Cadastrar cliente" %}</div>
+{% endblock %}

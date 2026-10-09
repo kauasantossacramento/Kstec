@@ -1,0 +1,23 @@
+{% load static %}<!doctype html>
+<html lang="pt-BR" data-theme="{% if request.user.is_authenticated and request.user.tema == 'escuro' %}dark{% else %}light{% endif %}">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="htmx-config" content='{"allowEval": false, "includeIndicatorStyles": false}'>
+  <title>{% block titulo %}KS CENTRAL{% endblock %} · KS TEC</title>
+  <link rel="icon" href="{% static 'img/favicon.svg' %}" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Manrope:wght@400;500;600;700;800&display=swap">
+  <link rel="stylesheet" href="{% static 'css/tokens.css' %}">
+  <link rel="stylesheet" href="{% static 'css/app.css' %}">
+  {% block head %}{% endblock %}
+</head>
+<body {% block body_attrs %}{% endblock %}>
+  {% block corpo %}{% endblock %}
+  {% for m in messages %}<div data-toast="{{ m }}" data-nivel="{{ m.tags }}" hidden></div>{% endfor %}
+  <script src="{% static 'vendor/htmx-2.0.4.min.js' %}" defer></script>
+  {% block scripts %}{% endblock %}
+  <script src="{% static 'js/app.js' %}" defer></script>
+</body>
+</html>

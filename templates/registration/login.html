@@ -1,0 +1,16 @@
+{% extends "registration/_auth_base.html" %}
+{% block titulo %}Entrar{% endblock %}
+{% block form %}
+<form method="post" novalidate>
+  {% csrf_token %}
+  <h2>Entrar</h2>
+  <p class="muted">Use seu e-mail corporativo.</p>
+  {% if form.errors %}<div class="alerta danger" role="alert">{% icone "alert" 18 %}<div>{% for e in form.non_field_errors %}{{ e }}{% endfor %}{% if not form.non_field_errors %}Confira os campos.{% endif %}</div></div>{% endif %}
+  <div class="stack">
+    {% for campo in form %}{% include "components/campo.html" %}{% endfor %}
+  </div>
+  <input type="hidden" name="next" value="{{ next }}">
+  <button class="btn btn-primario btn-pill" type="submit" style="width:100%;margin-top:18px">Entrar</button>
+  <p class="xs muted" style="margin-top:14px">Após 5 tentativas incorretas o acesso é bloqueado por 1 hora.</p>
+</form>
+{% endblock %}

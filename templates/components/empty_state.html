@@ -1,0 +1,5 @@
+<div class="vazio">
+  <svg class="simbolo" viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M32 3 57 17.5v29L32 61 7 46.5v-29z"/><path d="M24 22v20M24 32l10-10M27 30l8 12M44 24c-2-2-8-2-8 2s8 3 8 8-6 4-9 2"/></svg>
+  <p>{{ frase }}</p>
+  {% if acao_url %}<a class="btn btn-primario btn-pill" href="{{ acao_url }}">{% icone "plus" 16 %} {{ acao_rotulo|default:"Adicionar" }}</a>{% endif %}
+</div>

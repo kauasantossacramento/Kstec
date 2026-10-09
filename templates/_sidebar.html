@@ -1,0 +1,21 @@
+{% load static %}
+<aside class="sidebar" aria-label="Navegação principal">
+  <a href="{% url 'painel:home' %}" class="marca" aria-label="KS CENTRAL — início">
+    <img class="logo" src="{% static 'img/ks-tec-logo-branca.svg' %}" alt="KS TEC">
+    <img class="simbolo" src="{% static 'img/ks-tec-simbolo-branco.svg' %}" alt="KS TEC">
+  </a>
+  <nav>
+    {% for i in menu %}
+    <a class="item{% if i.ativo %} ativo{% endif %}" href="{{ i.href }}" {% if i.ativo %}aria-current="page"{% endif %} title="{{ i.rotulo }}">
+      {% icone i.icone 20 %}<span class="rotulo">{{ i.rotulo }}</span>
+    </a>
+    {% endfor %}
+  </nav>
+  <div class="rodape">
+    <div class="sep"></div>
+    {% for i in menu_rodape %}
+    <a class="item{% if i.ativo %} ativo{% endif %}" href="{{ i.href }}" title="{{ i.rotulo }}">{% icone i.icone 20 %}<span class="rotulo">{{ i.rotulo }}</span></a>
+    {% endfor %}
+    <a class="item" href="#" data-recolher-sidebar title="Recolher menu">{% icone "menu" 20 %}<span class="rotulo">Recolher</span></a>
+  </div>
+</aside>
