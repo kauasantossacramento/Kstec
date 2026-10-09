@@ -1,7 +1,7 @@
 # KS CENTRAL — passagem de desenvolvimento para o próximo agente
 
 Atualizado em **09/10/2026**, após integração fiscal, financeiro, operação,
-DANFSe PDF e entrega documental. Este documento descreve o estado observado;
+DANFSe PDF, entrega documental, faturamento recorrente, Asaas, WhatsApp e monitoramento. Este documento descreve o estado observado;
 não equivale à conclusão integral do plano ou à homologação de todos os cenários.
 
 ## 1. Repositório, ambiente e origem do trabalho
@@ -160,6 +160,49 @@ montado nesta entrega. O fluxo foi validado com contratos/certidões sintéticos
 banco isolado. Documentos de QA ficaram em `.tools`, sem despesas ou entregas
 fictícias cadastradas no banco operacional.
 
+## 7A. Faturamento recorrente, recebimentos, Asaas, WhatsApp e monitoramento (09/10/2026)
+
+Guia completo: [faturamento_recorrente_whatsapp.md](faturamento_recorrente_whatsapp.md). Deploy: [deploy.md](deploy.md).
+
+- **`apps/faturamento`**: agenda mensal por contrato (wizard de 4 passos com prévia), ciclos idempotentes
+  (1 nota por competência), modos rascunho/confirmar/automático, trava distribuída, consulta sem reenvio,
+  ajustes por mês, aba no contrato e **previsão de recebimentos** em calendário com ajuste mensal (`AjustePrevisao`).
+- **`apps/cobranca`**: Asaas (cliente, cobrança idempotente por `externalReference`, link, boleto, PIX/QR,
+  webhook autenticado com baixa opcional) e **perfil de cobrança por cliente** (WhatsApp, lembretes, forma).
+- **`apps/mensageria`**: WhatsApp via **neonize 0.5.2** em processo único `manage.py whatsapp_worker`
+  (fila, ritmo anti-bloqueio, consentimento/SAIR, disjuntor, lotes com confirmação SIM/NAO + código,
+  comandos do administrador, lembretes, resumo diário, relatório XLSX). Configuração nasce **desativada**.
+- **`apps/sla`**: monitoramento HTTP enxuto (incidentes, uptime, SSL, alertas app/WhatsApp).
+- Beat: tarefas de faturamento (00:40, */15, */10) e `rotinas_whatsapp` (*/10). Entradas antigas que apontavam
+  para tarefas inexistentes (`fiscal.alertar_certificado`, `fiscal.criar_guias_iss`, `fiscal.verificar_adn`,
+  `relatorios.lembrete_competencia`, `ia.verificar_limite_custo`, `sla.agregar_dia`) foram retiradas do agendamento.
+- Local: `KSCENTRAL_REDIS=True` + `scripts/iniciar_workers.ps1` sobem Celery worker (pool solo), beat e WhatsApp.
+  Sem Redis, use os botões "Executar rotina agora".
+- Produção: novo serviço `whatsapp` no compose com volume `whatsapp` (sessão do aparelho). **Docker não existe nesta
+  máquina: o build da imagem (neonize no Linux, `libmagic1`) e o stack compose não foram executados.**
+- Migrações aplicadas ao SQLite local; backup prévio em `.tools/backups/antes-recorrencia-whatsapp.sqlite3`.
+- Verificações: **203 testes** (45 novos), ruff, `check` e `makemigrations --check` aprovados; telas novas
+  renderizadas contra o banco local. **Nenhuma agenda real foi criada, nenhuma nota/cobrança/mensagem real enviada.**
+  A configuração fiscal vigente cobre só 01–31/10/2026: emissões de novembro serão **bloqueadas** até atualizar
+  percentuais e vigência (comportamento intencional).
+
+## 7B. Dados reais carregados (09/10/2026)
+
+Detalhes em [carga_dados_reais_20261009.md](carga_dados_reais_20261009.md). O banco local foi **limpo dos testes**
+(inclusive a NFS-e de R$ 1,00, que segue válida na prefeitura) e recebeu os 4 contratos com a Prefeitura/FUMSAUDE,
+11 NFS-e válidas + 5 canceladas importadas do ADN (`manage.py importar_nfse_adn`), agendas com ciclos, recebíveis,
+conta Banco do Brasil e certidões. **11 competências pendentes até set/2026 (R$ 34.110,00 brutos).**
+As notas válidas usam **ISS 2% retido pelo tomador**; o adaptador ainda não transmite retenção (pendência 10).
+A seção 5 abaixo descreve a nota de R$ 1,00 como histórico: ela não existe mais no banco local.
+
+## 7C. Produção e primeiras emissões (09/10/2026, noite)
+
+Sistema em produção em https://gestao.kstec.online (servidor compartilhado — ler
+[KSTEC-DEPLOY-E-ATUALIZACAO.md](KSTEC-DEPLOY-E-ATUALIZACAO.md) antes de qualquer ação). Banco de produção é a fonte da
+verdade; o SQLite local é só desenvolvimento. Emitidas pelo sistema as NFS-e 2600000000013–017 (INVICTA e CONMAC);
+contratos CONMAC, INVICTA e Bom Jesus da Lapa cadastrados; e-mails gestao@/financeiro@ ativos (587/STARTTLS);
+central de documentos, custos com rateio, relatório de SLA, alertas por e-mail e assistente Gemini (sem chave ainda).
+
 ## 8. Arquivos e pontos de entrada
 
 | Área | Pontos principais |
@@ -180,7 +223,7 @@ Não editar ou afrouxar XSD/assinatura para mascarar rejeições fiscais.
 
 ## 9. Verificações executadas e reprodução
 
-- Suíte local completa: **158 testes aprovados**, após as novas funcionalidades.
+- Suíte local completa: **203 testes aprovados** (158 anteriores + 45 de faturamento, WhatsApp, Asaas e monitoramento).
   Fluxo HTTP de permissões/relatórios/custos/e-mail revalidado separadamente.
 - Ruff, Django check, migrações em dia e `git diff --check` aprovados.
 - PDFs da nota real e dos modelos relatório/custos/índices renderizados e
@@ -235,14 +278,33 @@ executado nesta máquina; resultado local não comprova locks/concorrência de p
    homologar novos códigos municipais. Nacional direto depende de habilitação externa.
 3. **Operação/IA:** seleção de evidências/legendas no relatório, DOCX e Gemini
    com revisão humana, controle de custos e configuração segura.
-4. **Fase 7:** sistemas, monitoramento, incidentes e SLA não implementados.
+4. **Fase 7:** monitoramento básico entregue (`apps/sla`); relatório mensal de SLA e página pública de status pendentes.
    Se o contrato exige relatório SLA, o pacote bloqueia envio para não ficar incompleto.
 5. **Financeiro/custos:** vínculo a venda/empenho, transferências, categorias em
    árvore, DAPS opcional, orçamento de custos completo, importações e análises avançadas.
 6. **Produção/qualidade:** executar CI PostgreSQL, stack Docker/Redis/worker/beat,
    concorrência, carga, backup/restauração, segurança final, acessibilidade e manual.
    Meta de cobertura/aceites do plano ainda não alcançada integralmente.
-7. **Entrega Git:** trabalhar a partir da branch publicada, acompanhar o CI remoto
+7. **E-mail no cadastro e envio rápido (correção solicitada):** o formulário "Envio avulso" da NFS-e abre com
+   **Destinatários vazio**. Pré-preencher com `Pessoa.email_destino_nf` (e-mail para NF ou e-mail geral) e com os
+   contatos que recebem relatórios; permitir cadastrar/editar o e-mail do tomador ali mesmo (com confirmação) para
+   reaproveitar nos próximos envios; mesma lógica para o pacote contratual e para o perfil de cobrança.
+8. **Design e UX (melhoria contínua):** revisar consistência visual e fluxos em todo o sistema — formulários longos
+   em wizard (contratos, cadastros, configuração fiscal), estados vazios com ação, feedback de carregamento HTMX,
+   responsividade das tabelas/calendário, acessibilidade (contraste, foco, leitores de tela) e padronização de ações
+   destrutivas com confirmação. Componentes novos de referência: `static/css/modulos.css` e `static/js/wizard.js`.
+9. **Faturamento/WhatsApp — próximos passos:** e-mail automático pós-autorização usando `entregas.py` (hoje só
+   WhatsApp é automático); homologar Asaas em Sandbox com webhook público; aquecer o número e conectar o neonize;
+   tarefas pendentes do beat listadas em 7A.
+10. **ISS retido e dados obrigatórios na emissão (tarefa futura solicitada):** implementar e testar
+   `tpRetISSQN=2` (retido pelo tomador), alíquota 2% e `regApTribSN` como nas NFS-e 2600000000007–011; a emissão deve
+   sempre informar ISS e retenção na fonte. Conferir campo a campo com os XMLs oficiais em `.tools/importacao-notas/`.
+   As notas canceladas por substituição (001, 002, 004, 005, 006) tinham ISS 0%/não retido — foi esse o erro.
+11. **Pendências da carga real:** percentuais fiscais por competência (jun–set), código municipal da Transparência
+   (17.01), número do contrato da Fibromialgia (notas citam 116/2026), possível duplicidade da NFS-e nacional nº 7,
+   contrato SDL Advocacia sem documentos, certidões FGTS/Municipal/Estadual vencidas, baixa dos recebíveis já pagos e
+   DANFSe de notas MEI (`cStat 107`).
+12. **Entrega Git:** trabalhar a partir da branch publicada, acompanhar o CI remoto
    e planejar revisão/merge/deploy separadamente. Não tratar push como deploy aprovado.
 
 ## 12. Leituras complementares

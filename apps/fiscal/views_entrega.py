@@ -11,6 +11,7 @@ from django.utils import timezone
 from apps.contratos.models import Contrato
 from apps.contratos.views import contratos_visiveis
 from apps.core.permissoes import exigir_escrita, pode_escrever
+from apps.core.services.email import envio_real
 from apps.financeiro.models import PlanilhaCustos
 from apps.financeiro.services.custos import nova_planilha, salvar_planilha
 from apps.operacao.models import RelatorioAtividades
@@ -35,6 +36,15 @@ def pdf(request, pk):
     return FileResponse(arquivo.arquivo.open("rb"), as_attachment=request.GET.get("baixar") == "1", filename=arquivo.nome)
 
 
+def destinatarios_sugeridos(nota):
+    lista = list(nota.tomador.emails_envio)
+    if nota.contrato_id:
+        for contato in (nota.contrato.gestor_contrato, nota.contrato.fiscal_contrato):
+            if contato and contato.email and contato.email.lower() not in lista:
+                lista.append(contato.email.lower())
+    return lista
+
+
 @login_required
 def entregas(request, pk):
     exigir_escrita(request.user, ["Fiscal", "Financeiro"])
@@ -46,7 +56,7 @@ def entregas(request, pk):
         except ValidationError as erro:
             pendentes = erro.messages
     form = PrepararEntregaForm(request.POST or None, initial={
-        "destinatarios": nota.tomador.email_destino_nf,
+        "destinatarios": "; ".join(destinatarios_sugeridos(nota)),
         "assunto": f"NFS-e {nota.numero_nfse}" + (f" · Contrato {nota.contrato.numero}" if nota.contrato_id else ""),
         "mensagem": f"Prezados,\n\nSegue a documentação da NFS-e {nota.numero_nfse}, competência {nota.competencia:%m/%Y}.\n\nAtenciosamente,\n{nota.empresa.razao_social}"})
     if request.method == "POST" and form.is_valid():
@@ -58,7 +68,7 @@ def entregas(request, pk):
             return redirect("fiscal:entrega_revisar", pk=entrega.pk)
     return render(request, "fiscal/entregas.html", {"nota": nota, "form": form, "pendentes": pendentes,
               "entregas": nota.entregas.all(), "backend_email": settings.EMAIL_BACKEND,
-              "email_real": settings.EMAIL_BACKEND == "django.core.mail.backends.smtp.EmailBackend"})
+              "email_real": envio_real("DOCUMENTOS", request.empresa)})
 
 
 @login_required
@@ -75,7 +85,7 @@ def entrega_revisar(request, pk):
             messages.success(request, entrega.get_status_display() + ".")
             return redirect("fiscal:entrega_revisar", pk=pk)
     return render(request, "fiscal/entrega_revisar.html", {"entrega": entrega, "form": form,
-               "email_real": settings.EMAIL_BACKEND == "django.core.mail.backends.smtp.EmailBackend"})
+               "email_real": envio_real("DOCUMENTOS", request.empresa)})
 
 
 @login_required

@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block titulo %}{{ rel }}{% endblock %}
+{% block breadcrumb %}{% icone "chevron-right" 14 %}<a href="{% url 'relatorios:home' %}">Relatórios</a>{% icone "chevron-right" 14 %}<span class="atual">SLA {{ rel.competencia|date:"m/Y" }}</span>{% endblock %}
+{% block h1 %}Relatório de SLA · {{ rel.competencia|date:"m/Y" }}{% endblock %}
+{% block subtitulo %}<p class="sub">Contrato {{ rel.contrato.numero }} · {{ rel.contrato.cliente }} · versão {{ rel.versao }} · {% status_badge rel.status rotulo=rel.get_status_display %}</p>{% endblock %}
+{% block acoes %}{% if rel.pdf_id %}<a class="btn btn-primario" href="{% url 'core:anexo_baixar' rel.pdf_id %}?ver=1" target="_blank" rel="noopener">{% icone "eye" 16 %} Abrir PDF</a>{% endif %}{% endblock %}
+{% block conteudo %}
+{% if dados.sem_dados %}<div class="alerta warning">{% icone "alert" 18 %}<div>Sem verificações registradas neste mês para os sistemas do contrato. O monitoramento começa a acumular dados a partir do cadastro do sistema.</div></div>{% endif %}
+<div class="grid g-3" style="margin-bottom:16px">
+  <div class="card kpi"><span class="rotulo">{% icone "activity" 16 %}Disponibilidade média</span><span class="valor">{% if dados.uptime_geral is not None %}{{ dados.uptime_geral|floatformat:3 }}%{% else %}—{% endif %}</span></div>
+  <div class="card kpi"><span class="rotulo">{% icone "server" 16 %}Sistemas</span><span class="valor">{{ dados.sistemas|length }}</span></div>
+  <div class="card kpi"><span class="rotulo">{% icone "clock" 16 %}Apurado em</span><span class="valor" style="font-size:var(--fs-lg)">{{ dados.gerado_em|slice:":10" }}</span></div>
+</div>
+<div class="tabela-wrap responsiva"><table class="tabela">
+  <thead><tr><th>Sistema</th><th class="num">Verificações</th><th class="num">Falhas</th><th class="num">Disponibilidade</th><th>Meta</th><th class="num">Resposta média</th><th class="num">Indisponível</th></tr></thead>
+  <tbody>{% for s in dados.sistemas %}<tr>
+    <td data-rotulo="Sistema"><strong>{{ s.nome }}</strong><br><span class="xs muted">{{ s.url }}</span></td>
+    <td data-rotulo="Verificações" class="num mono">{{ s.verificacoes }}</td><td data-rotulo="Falhas" class="num mono">{{ s.falhas }}</td>
+    <td data-rotulo="Disponibilidade" class="num mono">{% if s.uptime is not None %}{{ s.uptime|floatformat:3 }}%{% else %}—{% endif %}</td>
+    <td data-rotulo="Meta">{{ s.meta }}% {% if s.uptime is not None %}{% if s.atingiu %}{% status_badge "success" rotulo="atingida" %}{% else %}{% status_badge "danger" rotulo="não atingida" %}{% endif %}{% endif %}</td>
+    <td data-rotulo="Resposta" class="num mono">{{ s.tempo_medio_ms|default:"—" }}{% if s.tempo_medio_ms %} ms{% endif %}</td>
+    <td data-rotulo="Indisponível" class="num mono">{{ s.indisponivel_min }} min</td></tr>{% empty %}<tr><td colspan="7" class="muted">Nenhum sistema vinculado ao contrato.</td></tr>{% endfor %}</tbody>
+</table></div>
+{% if pode_aprovar %}
+<form method="post" class="card stack" style="margin-top:16px" data-confirmar="Os dados são reapurados agora e o PDF fica imutável. Para mudar depois, gere nova versão." data-confirmar-titulo="Aprovar relatório de SLA?" data-confirmar-botao="Aprovar" data-confirmar-perigo="0">{% csrf_token %}
+  <label for="obs"><strong>Observações</strong> <span class="muted small">(entram no PDF)</span></label>
+  <textarea class="input" id="obs" name="observacoes" rows="3">{{ rel.observacoes }}</textarea>
+  <button class="btn btn-primario" type="submit">{% icone "check" 16 %} Aprovar e gerar PDF</button>
+</form>
+{% endif %}
+{% endblock %}

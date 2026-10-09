@@ -10,6 +10,7 @@ CELERY_TASK_EAGER_PROPAGATES = True
 CELERY_BROKER_URL = "memory://"
 CELERY_RESULT_BACKEND = "cache+memory://"
 EMAIL_BACKEND = "django.core.mail.backends.locmem.EmailBackend"
+EMAIL_CONTAS_SMTP = False
 FIELD_ENCRYPTION_KEY = "rG4bDy3m6hW3J1lJ0x3hqS7c3YkJ8xV0pQ2sT5uX9zA="
 MFA_OBRIGATORIO = False
 AXES_ENABLED = False

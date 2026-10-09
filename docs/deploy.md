@@ -1,38 +1,122 @@
-# Manual de Deploy — KS CENTRAL
+# Manual de deploy — KS CENTRAL
 
-> Público: quem administra a VPS da KS TEC. Ambiente alvo: VPS Hetzner (Ubuntu 24.04 LTS) com Docker Compose.
-> Serviços: `web` (gunicorn) · `worker` (Celery) · `beat` (agendador) · `db` (PostgreSQL 16) · `redis` · `caddy` (HTTPS automático).
+> **Para quem:** quem publica e administra o KS CENTRAL (você ou o próximo agente).
+> **Alvo:** VPS Ubuntu 24.04 LTS com Docker Compose. **Atualizado em 09/10/2026.**
+> Serviços: `web` (gunicorn) · `worker` (Celery) · `beat` (agendador) · `whatsapp` (neonize) · `db` (PostgreSQL 16) ·
+> `redis` · `caddy` (HTTPS automático).
 
 ## Sumário
 
-1. [Pré-requisitos](#1-pré-requisitos)
-2. [Preparar a VPS](#2-preparar-a-vps)
-3. [Obter o código e configurar o `.env`](#3-obter-o-código-e-configurar-o-env)
-4. [Primeira subida](#4-primeira-subida)
-5. [Carga inicial (seed, tabelas fiscais, usuários)](#5-carga-inicial)
-6. [Configuração fiscal (certificado A1, canais NFS-e)](#6-configuração-fiscal)
-7. [Atualizações (deploy contínuo por tag)](#7-atualizações)
-8. [Backups e restauração](#8-backups-e-restauração)
-9. [Monitoramento, logs e Sentry](#9-monitoramento-logs-e-sentry)
-10. [Rollback](#10-rollback)
-11. [Solução de problemas](#11-solução-de-problemas)
-12. [Checklist de go-live](#12-checklist-de-go-live)
-13. [Referência: variáveis de ambiente](#13-referência-variáveis-de-ambiente)
-14. [Referência: comandos de gestão e tarefas agendadas](#14-referência-comandos-de-gestão-e-tarefas-agendadas)
+1. [Onde está o sistema (Git e esta máquina)](#1-onde-está-o-sistema)
+2. [Fluxo Git até a produção](#2-fluxo-git-até-a-produção)
+3. [Arquitetura de produção](#3-arquitetura-de-produção)
+4. [Pré-requisitos](#4-pré-requisitos)
+5. [Preparar a VPS](#5-preparar-a-vps)
+6. [Código e `.env` na VPS](#6-código-e-env-na-vps)
+7. [Primeira subida](#7-primeira-subida)
+8. [Dados: banco novo **ou** migração desta máquina](#8-dados-banco-novo-ou-migração-desta-máquina)
+9. [Configuração fiscal](#9-configuração-fiscal)
+10. [Faturamento recorrente](#10-faturamento-recorrente)
+11. [Asaas (cobrança, PIX e webhook)](#11-asaas)
+12. [WhatsApp (neonize)](#12-whatsapp)
+13. [Monitoramento de sistemas](#13-monitoramento-de-sistemas)
+14. [Atualizações](#14-atualizações)
+15. [Backups e restauração](#15-backups-e-restauração)
+16. [Logs e observabilidade](#16-logs-e-observabilidade)
+17. [Rollback](#17-rollback)
+18. [Solução de problemas](#18-solução-de-problemas)
+19. [Checklist de go-live](#19-checklist-de-go-live)
+20. [Referência: variáveis de ambiente](#20-referência-variáveis-de-ambiente)
+21. [Referência: comandos e tarefas agendadas](#21-referência-comandos-e-tarefas-agendadas)
+22. [Ambiente local nesta máquina](#22-ambiente-local-nesta-máquina)
 
 ---
 
-## 1. Pré-requisitos
+## 1. Onde está o sistema
+
+| Item | Valor |
+|---|---|
+| Repositório | https://github.com/kauasantossacramento/Kstec (`origin`) |
+| Branch de trabalho | **`desenvolvimento-local`** |
+| Branch padrão remota | `ccr-86406a8c-5a2ak0` (base de PRs). O CI publica `:latest` apenas para `main` e tags `v*`. |
+| Pasta nesta máquina | **`C:\Users\KS TEC\sistema_kstec_`** (Windows 11, PowerShell, Python 3.13 em `.venv`) |
+| Pasta antiga preservada | `C:\Users\KS TEC\sistema_kstec` — não usar |
+| Pasta na VPS (sugerida) | `/srv/kscentral` |
+| Imagem Docker | `ghcr.io/kauasantossacramento/kscentral:<tag>` |
+
+**Nunca vão para o Git** (estão no `.gitignore`) e precisam ser levados à mão, por canal seguro, quando necessário:
+
+| Arquivo/pasta nesta máquina | Conteúdo | Observação |
+|---|---|---|
+| `.env` | Segredos locais, inclusive **`FIELD_ENCRYPTION_KEY`** | A mesma chave é obrigatória se o banco local for migrado (seção 8B). |
+| `local.sqlite3` | Banco local com a configuração fiscal real, A1/token cifrados, NFS-e real nº 2600000000012 | Base da migração de dados. |
+| `media\` | XML/PDF arquivados, anexos | Copiar junto com o banco. |
+| `.tools\` | Backups (`.tools\backups\*.sqlite3`), evidências fiscais, WeasyPrint Windows, sessão local do WhatsApp | Não copiar para a VPS, exceto o que for pedido. |
+| `KS TEC SOLUÇÕES ATÉ 08.2027 (1).pfx` | Certificado A1 original | Já está cifrado no banco; o arquivo serve só para recadastro. |
+
+## 2. Fluxo Git até a produção
+
+Nesta máquina (PowerShell, na pasta do projeto):
+
+```powershell
+cd "C:\Users\KS TEC\sistema_kstec_"
+.venv\Scripts\python.exe -m ruff check .
+.venv\Scripts\python.exe manage.py makemigrations --check --dry-run --settings=config.settings.local
+.venv\Scripts\python.exe -m pytest --ds=config.settings.test_local
+git status                       # confira: nada de .env, sqlite, media, .tools ou .pfx
+git add -A
+git commit -m "Descrição da mudança"
+git push origin desenvolvimento-local
+```
+
+Depois, no GitHub:
+
+1. Abra um **Pull Request** de `desenvolvimento-local` para a branch padrão e acompanhe o **CI** (ruff, migrações,
+   testes em PostgreSQL, build da imagem). O CI nunca rodou o stack completo desta entrega — trate a primeira execução
+   com atenção.
+2. Após aprovar e fazer o merge, crie a **tag de versão** a partir da branch padrão:
+
+   ```powershell
+   git fetch origin
+   git checkout ccr-86406a8c-5a2ak0      # ou a branch padrão vigente
+   git pull
+   git tag -a v1.4.0 -m "v1.4.0 — faturamento recorrente, Asaas, WhatsApp e monitoramento"
+   git push origin v1.4.0
+   ```
+
+3. A tag dispara o CI (publica `ghcr.io/kauasantossacramento/kscentral:v1.4.0`) e, se o CI passar, o workflow
+   **Deploy** entra na VPS por SSH e executa `scripts/deploy.sh v1.4.0` (seção 14).
+
+> Push não é deploy: só a **tag** publica em produção. Volte para `desenvolvimento-local` depois de taguear.
+
+## 3. Arquitetura de produção
+
+```
+Internet ──443──> caddy ──> web (gunicorn, Django) ──> db (PostgreSQL 16)
+                                   │                └─> redis (cache, travas, fila Celery)
+                                   ├─ worker (Celery: emissões, consultas, rotinas)
+                                   ├─ beat   (agenda: DatabaseScheduler, processo único)
+                                   └─ whatsapp (manage.py whatsapp_worker: sessão neonize + fila de mensagens)
+Asaas ──webhook──> https://<domínio>/cobrancas/webhook/
+```
+
+Regras importantes:
+- **Apenas um `beat`** e **apenas um `whatsapp`** por número. Não escale esses serviços.
+- `worker` pode ter réplicas: todas as rotinas usam **trava distribuída no Redis** e são idempotentes.
+- Somente o `web` aplica migrações (`RUN_MIGRATIONS=1`).
+- A sessão do WhatsApp fica no volume `whatsapp` (`/app/data/whatsapp/sessao.sqlite3`).
+
+## 4. Pré-requisitos
 
 | Item | Detalhe |
 |---|---|
-| VPS | Hetzner CX22 ou superior (2 vCPU, 4 GB RAM, 40 GB SSD). Para > 30 sistemas monitorados, CX32. |
-| DNS | Registro `A` (e `AAAA`, se houver IPv6) de `central.kstec.online` apontando para a VPS. Opcional: `status.kstec.online` (página pública de status). |
-| Portas | 22 (SSH, restrita), 80 e 443 abertas. |
-| Contas | GitHub (acesso ao repositório e ao GHCR), SMTP para e-mails, chave da API Gemini, Sentry (opcional), storage externo para backup (Nextcloud/S3). |
-| Fiscal | Certificado A1 (e-CNPJ ICP-Brasil, `.pfx` + senha). Ver pendências no plano, seção 14.5. |
+| VPS | 2 vCPU, 4 GB RAM, 40 GB SSD (ex.: Hetzner CX22). Com muitos sistemas monitorados, 4 GB+ livres. |
+| DNS | Registro `A` (e `AAAA`) de `central.kstec.online` para o IP da VPS. |
+| Portas | 22 (SSH restrito), 80 e 443. |
+| Contas | GitHub (repositório e GHCR), SMTP, Asaas (Sandbox e Produção), chip dedicado ao WhatsApp, Sentry (opcional), destino externo de backup (Nextcloud/S3 via rclone). |
+| Fiscal | A1 ICP-Brasil da empresa (já cifrado no banco local), token municipal E&L, percentuais vigentes informados pelo contador. |
 
-## 2. Preparar a VPS
+## 5. Preparar a VPS
 
 ```bash
 # como root, uma única vez
@@ -56,286 +140,346 @@ ufw default deny incoming && ufw default allow outgoing
 ufw allow OpenSSH && ufw allow 80/tcp && ufw allow 443/tcp
 ufw enable
 
-# Fuso horário do host (os containers já usam America/Bahia)
 timedatectl set-timezone America/Bahia
 ```
 
-Endurecimento do SSH (`/etc/ssh/sshd_config`): `PasswordAuthentication no`, `PermitRootLogin no`. Reinicie com `systemctl restart ssh` **depois** de confirmar o login por chave com o usuário `ks`.
+Endureça o SSH (`/etc/ssh/sshd_config`: `PasswordAuthentication no`, `PermitRootLogin no`) **depois** de confirmar o
+login por chave com o usuário `ks`, e reinicie com `systemctl restart ssh`.
 
-## 3. Obter o código e configurar o `.env`
+## 6. Código e `.env` na VPS
 
 ```bash
 sudo mkdir -p /srv/kscentral && sudo chown ks:ks /srv/kscentral
 su - ks
 git clone https://github.com/kauasantossacramento/Kstec.git /srv/kscentral
 cd /srv/kscentral
-cp .env.example .env
-chmod 600 .env
+git checkout v1.4.0            # a tag que será publicada
+cp .env.example .env && chmod 600 .env
 ```
 
-Gere os segredos e preencha o `.env`:
+Gerar segredos:
 
 ```bash
-# DJANGO_SECRET_KEY
-python3 -c "import secrets; print(secrets.token_urlsafe(64))"
-# FIELD_ENCRYPTION_KEY (Fernet) — GUARDE EM LOCAL SEGURO: sem ela os segredos do banco (senha do PFX, senha E&L) ficam ilegíveis
-python3 -c "import base64,os; print(base64.urlsafe_b64encode(os.urandom(32)).decode())"
-# POSTGRES_PASSWORD e BACKUP_PASSPHRASE
-python3 -c "import secrets; print(secrets.token_urlsafe(32))"
+python3 -c "import secrets; print(secrets.token_urlsafe(64))"          # DJANGO_SECRET_KEY
+python3 -c "import secrets; print(secrets.token_urlsafe(32))"          # POSTGRES_PASSWORD e BACKUP_PASSPHRASE
+python3 -c "import base64,os; print(base64.urlsafe_b64encode(os.urandom(32)).decode())"   # FIELD_ENCRYPTION_KEY (banco novo)
 ```
 
-Campos obrigatórios em produção: `DJANGO_SECRET_KEY`, `DJANGO_ALLOWED_HOSTS`, `DJANGO_CSRF_TRUSTED_ORIGINS`, `SITE_URL`, `DOMINIO`, `ACME_EMAIL`, `POSTGRES_PASSWORD`, `DATABASE_URL` (com a mesma senha), `FIELD_ENCRYPTION_KEY`, `EMAIL_URL`, `BACKUP_PASSPHRASE`. Ver a [seção 13](#13-referência-variáveis-de-ambiente).
+> ⚠️ **`FIELD_ENCRYPTION_KEY`**: se for migrar o banco desta máquina (seção 8B), use **exatamente** o valor do
+> `.env` local (`C:\Users\KS TEC\sistema_kstec_\.env`). Outra chave torna ilegíveis o A1, a senha do A1, o token
+> municipal, a chave do Asaas e o token do webhook. Guarde-a num cofre de senhas, fora da VPS.
 
-> ⚠️ No `EMAIL_URL`, caracteres especiais do usuário/senha precisam ser codificados (`@` → `%40`).
+Preencha no mínimo: `DJANGO_SETTINGS_MODULE=config.settings.prod`, `DJANGO_SECRET_KEY`, `DJANGO_ALLOWED_HOSTS`,
+`DJANGO_CSRF_TRUSTED_ORIGINS`, `SITE_URL` (https, usado em links e no aviso do webhook), `DOMINIO`, `ACME_EMAIL`,
+`POSTGRES_PASSWORD`, `DATABASE_URL`, `REDIS_URL`, `FIELD_ENCRYPTION_KEY`, `EMAIL_URL`, `DEFAULT_FROM_EMAIL`,
+`BACKUP_PASSPHRASE`. Ver [seção 20](#20-referência-variáveis-de-ambiente). No `EMAIL_URL`, codifique caracteres
+especiais (`@` → `%40`).
 
-## 4. Primeira subida
-
-Todos os comandos `docker compose` usam o arquivo em `docker/` e o `.env` da raiz. Crie um alias para facilitar:
+## 7. Primeira subida
 
 ```bash
 echo 'alias dc="docker compose -f /srv/kscentral/docker/compose.yml --env-file /srv/kscentral/.env"' >> ~/.bashrc
 source ~/.bashrc
+
+# Se o pacote GHCR for privado:
+echo <TOKEN_read:packages> | docker login ghcr.io -u <usuario-github> --password-stdin
+
+# Imagem publicada pelo CI…
+KS_IMAGE=ghcr.io/kauasantossacramento/kscentral:v1.4.0 dc pull
+KS_IMAGE=ghcr.io/kauasantossacramento/kscentral:v1.4.0 dc up -d
+# …ou build na própria VPS
+dc up -d --build
 ```
 
-Imagem: o CI publica `ghcr.io/kauasantossacramento/kscentral:<tag>`. Se o pacote for privado, autentique uma vez:
+O `web` aplica migrações e `collectstatic`. Verifique:
 
 ```bash
-echo <TOKEN_COM_read:packages> | docker login ghcr.io -u <usuario-github> --password-stdin
-```
-
-Subir (puxando a imagem publicada) **ou** construindo localmente na VPS:
-
-```bash
-KS_IMAGE=ghcr.io/kauasantossacramento/kscentral:latest dc pull && dc up -d     # imagem publicada
-# ou
-dc up -d --build                                                               # build local
-```
-
-O serviço `web` aplica as migrações e o `collectstatic` automaticamente (`RUN_MIGRATIONS=1`). Verifique:
-
-```bash
-dc ps                                  # todos "healthy"/"running"
+dc ps                                    # web healthy; worker, beat, whatsapp, db, redis, caddy running
 curl -s https://central.kstec.online/health
-# {"status": "ok", "componentes": {"banco": {"status": "ok", ...}, "cache": {"status": "ok"}}}
 dc exec web python manage.py check --deploy
+dc logs --tail 50 beat worker whatsapp
 ```
 
-O Caddy emite o certificado TLS automaticamente na primeira requisição (o DNS precisa já apontar para a VPS).
+O `whatsapp` sobe e aguarda: a configuração nasce **desativada** e nada é enviado até você ativar (seção 12).
 
-## 5. Carga inicial
+## 8. Dados: banco novo **ou** migração desta máquina
+
+Escolha **um** dos caminhos.
+
+### 8A. Banco novo
 
 ```bash
-# Empresa KS TEC, papéis, plano de categorias financeiras, tipos de certidão, prompts de IA
-dc exec web python manage.py seed_inicial
-
-# Superusuário (Administrador)
+dc exec web python manage.py seed_inicial         # empresa, papéis, categorias, tipos de certidão
 dc exec web python manage.py createsuperuser
-
-# Tabelas fiscais de referência (Anexo B e Anexo VIII do pacote E&L/ABRASF)
-# copie os XLSX para a VPS e então:
+# Tabelas fiscais oficiais (os XLSX não estão no Git):
 dc cp ANEXO_B-NBS2-LISTA_SERVICO_NACIONAL.xlsx web:/tmp/
 dc cp AnexoVIII-CorrelacaoItemNBSIndOpCClassTrib_IBSCBS.xlsx web:/tmp/
 dc exec web python manage.py importar_tabelas_fiscais /tmp/ANEXO_B-NBS2-LISTA_SERVICO_NACIONAL.xlsx \
     /tmp/AnexoVIII-CorrelacaoItemNBSIndOpCClassTrib_IBSCBS.xlsx
-
-# Histórico de notas do portal E&L (XMLs ou ZIP; a exportação do portal é limitada a 90 dias por arquivo)
-dc cp notas_2025.zip web:/tmp/
-dc exec web python manage.py importar_nfse_el /tmp/notas_2025.zip
-
-# Competências faltantes dos contratos vigentes
-dc exec web python manage.py gerar_competencias
+# Referências municipais (Valença/BA, LC 010/2021), sem confirmar códigos automaticamente:
+dc cp anexo_municipal.pdf web:/tmp/
+dc exec web python manage.py importar_servicos_municipais /tmp/anexo_municipal.pdf --municipio 2932903 \
+    --fonte "LC municipal 010/2021, Anexo I"
 ```
 
-Após o primeiro login, o Administrador é obrigado a configurar o **MFA (TOTP)** — use Google Authenticator, Aegis ou 1Password. Os papéis Financeiro e Fiscal também exigem MFA.
+Depois cadastre A1, token e percentuais na tela (seção 9) e confirme o código municipal `101` do serviço TI-DEV.
 
-Usuários: **Configurações → Usuários** (ou `/admin/`). Papéis disponíveis: Administrador, Financeiro, Fiscal, Operação, Leitura.
+### 8B. Migrar o banco desta máquina (SQLite → PostgreSQL)
 
-## 6. Configuração fiscal
+Leva a configuração fiscal real, a NFS-e já emitida, cadastros, tabelas fiscais importadas e históricos.
+**Ensaie primeiro em uma VPS/compose de homologação.**
 
-> Antes de emitir em produção, leia a seção 6.14 do plano (duplo canal Nacional × E&L) e as pendências 14.5.
+Nesta máquina (PowerShell):
 
-1. **Fiscal → Certificados → Novo**: envie o `.pfx` e a senha. O sistema recusa certificado vencido ou de CNPJ diferente do da empresa. O PFX e a senha ficam criptografados no banco (Fernet).
-2. **Fiscal → Configuração**:
-   - `ambiente`: comece com **PRODUCAO_RESTRITA** (sem valor fiscal).
-   - `canais_habilitados`: `NACIONAL` e, se confirmado com a prefeitura, `EL_ABRASF`.
-   - `url_el`: URL do webservice E&L de Valença (obter com a prefeitura/E&L).
-   - `el_permite_competencia_atual`: deixe **desligado** até haver confirmação formal.
-   - `fallback_automatico`: deixe **desligado**.
-3. **Fiscal → Perfis fiscais**: cadastre as regras de retenção validadas pelo contador.
-4. XSDs oficiais: copie os XSDs vigentes para `apps/fiscal/xml/schemas/nacional/` e `apps/fiscal/xml/schemas/abrasf/` (ver `apps/fiscal/xml/schemas/README.md`), gere uma nova tag e faça o deploy. Sem XSD, a validação local é pulada e um aviso é registrado no log.
-5. Teste de conectividade mTLS com a Sefin (produção restrita):
+```powershell
+cd "C:\Users\KS TEC\sistema_kstec_"
+# pare o runserver local antes, para o banco não mudar durante a exportação
+New-Item -ItemType Directory -Force .tools\migracao | Out-Null
+Copy-Item local.sqlite3 .tools\backups\antes-migracao-producao.sqlite3
+.venv\Scripts\python.exe -X utf8 manage.py dumpdata --natural-foreign --natural-primary `
+  -e contenttypes -e auth.permission -e sessions -e admin.logentry -e axes -e django_celery_beat `
+  --indent 1 -o .tools\migracao\dados.json --settings=config.settings.local
+Compress-Archive -Path media\* -DestinationPath .tools\migracao\media.zip -Force
+Get-FileHash .tools\migracao\dados.json, .tools\migracao\media.zip -Algorithm SHA256
+```
 
-   ```bash
-   dc exec web python manage.py testar_sefin
-   ```
+Transfira `dados.json` e `media.zip` por canal seguro (ex.: `scp`) — contêm CPF de tomador e documentos fiscais.
 
-6. Siga o **protocolo de teste em produção** (plano, seção 6.14.6) e registre o diário de testes antes de definir o `canal_padrao` e mudar `ambiente` para `PRODUCAO`.
-
-## 7. Atualizações
-
-Fluxo padrão (deploy contínuo por tag):
-
-1. Merge na `main` → CI roda lint + testes + build e publica `:latest`.
-2. Criar a tag de versão:
-
-   ```bash
-   git tag -a v1.3.0 -m "v1.3.0" && git push origin v1.3.0
-   ```
-
-3. O CI publica `ghcr.io/kauasantossacramento/kscentral:v1.3.0` e o workflow **Deploy** (ambiente `producao`) entra na VPS via SSH e executa `scripts/deploy.sh v1.3.0`, que:
-   - faz um **backup** antes de tudo;
-   - baixa a imagem da tag;
-   - recria `web`, `worker` e `beat` (o `web` aplica migrações);
-   - roda `manage.py check --deploy`.
-
-Segredos necessários no repositório (Settings → Environments → `producao`): `VPS_HOST`, `VPS_USER` (`ks`), `VPS_SSH_KEY` (chave privada dedicada ao deploy, cuja pública está em `~ks/.ssh/authorized_keys`).
-
-Deploy manual (sem GitHub Actions):
+Na VPS, com o `.env` usando a **mesma `FIELD_ENCRYPTION_KEY`** e o banco **recém-migrado e vazio**
+(não rode `seed_inicial` neste caminho):
 
 ```bash
-cd /srv/kscentral && git fetch --tags && git checkout v1.3.0
-./scripts/deploy.sh v1.3.0
+sha256sum dados.json media.zip                    # compare com os hashes locais
+dc cp dados.json web:/tmp/dados.json
+dc exec web python manage.py loaddata /tmp/dados.json
+unzip media.zip -d media_migrada
+dc cp media_migrada/. web:/app/media/
+dc exec -u root web chown -R ks:ks /app/media
+dc exec web python manage.py check --deploy
+dc exec web rm /tmp/dados.json && rm -rf dados.json media.zip media_migrada
 ```
 
-## 8. Backups e restauração
+Conferências obrigatórias após a migração:
+- **Fiscal → Configuração**: checklist verde, A1 legível e dentro da validade, token presente.
+- Abrir a NFS-e nº 2600000000012 e baixar o PDF (confirma mídia e hashes).
+- **Nunca retransmitir** essa nota; ela já está autorizada.
+- Usuários conseguem entrar; Administrador/Fiscal/Financeiro configuram o MFA no primeiro acesso.
 
-`scripts/backup.sh` gera `pg_dump` (formato custom) + mídia em um único arquivo **criptografado com AES-256** (`BACKUP_PASSPHRASE`), com retenção de **30 diários + 12 mensais**, e sincroniza com storage externo via `rclone` se `BACKUP_RCLONE_REMOTE` estiver definido.
+## 9. Configuração fiscal
 
-Agende no cron do usuário `ks`:
+Tela **Fiscal → Configuração** (papel Fiscal). Campos reais:
+
+| Campo | Produção atual |
+|---|---|
+| Canal padrão | `Municipal E&L — DPS nacional` (o emissor nacional direto retornou E0039 — município não habilitado) |
+| Ambiente | `Produção` (1) |
+| Série DPS | `1` |
+| Certificado / novo A1 + senha | A1 cifrado; recusa A1 vencido ou de outro CNPJ |
+| Novo token municipal | Token E&L (cifrado) |
+| ISS padrão / Tributos aproximados do Simples | **2% / 6%**, com fonte e vigência **01–31/10/2026** |
+| Perfil padrão, conta de recebimento, prazo | Conferir antes de faturar |
+
+> A cada mês, **atualize percentuais e vigência** com o contador. Sem isso, o checklist falha e os ciclos do
+> faturamento recorrente ficam **Bloqueados** (comportamento intencional — nenhuma nota sai com percentual vencido).
+
+Diagnóstico sem emitir: `dc exec web python manage.py diagnosticar_nfse <arquivo.pfx>` e
+`dc exec web python manage.py consultar_dps_el <idDPS> --ambiente 1`.
+
+## 10. Faturamento recorrente
+
+1. Contrato **vigente** com cliente, valor e saldo corretos; item do catálogo sem pendências fiscais.
+2. **Faturamento → Nova agenda** (ou aba Faturamento do contrato): siga os 4 passos e confira a prévia.
+3. Comece no modo **Confirmar**: o sistema prepara e valida a nota no dia programado e pede sua confirmação na tela
+   ou no WhatsApp (`SIM <código>`).
+4. Confirme que o `beat` está ativo: `/admin/django_celery_beat/periodictask/` deve listar
+   `faturamento.planejar_ciclos`, `faturamento.processar_ciclos`, `faturamento.acompanhar_transmissoes`.
+5. Acompanhe em **Faturamento** (pendências, bloqueios) e **Previsão de recebimentos**.
+
+## 11. Asaas
+
+1. **Configurações → Cobrança Asaas**: ambiente **Sandbox** primeiro, chave de API, forma padrão, multa/juros,
+   baixa automática e **conta da baixa** (crie a conta "Asaas" no financeiro). Salve e clique em **Testar conexão**.
+2. Copie a **URL** (`https://central.kstec.online/cobrancas/webhook/`) e o **token** exibidos na tela para
+   Asaas → Integrações → Webhooks (cobranças), versão de API v3, eventos de pagamento.
+3. Teste: gere uma cobrança num lançamento de receita, pague no Sandbox e verifique a baixa e o aviso.
+4. Para produção, troque o ambiente e a chave. Cobranças do Sandbox não migram.
+
+## 12. WhatsApp
+
+> WhatsApp Web via neonize **não é API oficial**. Use chip dedicado, com nome e foto da empresa, aquecido com
+> conversas reais. Comece com limites baixos.
+
+1. **Configurações → WhatsApp**: marque *WhatsApp ativo*, transporte **WhatsApp Web (neonize)**, informe **meus
+   números**, revise janela, limites, confirmação e automações. Salve.
+2. Reinicie o serviço para carregar o transporte: `dc restart whatsapp`.
+3. Abra **WhatsApp** no sistema: o QR Code aparece (atualiza sozinho). No celular: *Aparelhos conectados → Conectar
+   aparelho*. O estado muda para **Conectado**.
+4. **Enviar teste para meus números**; responda `ajuda` para testar os comandos.
+5. Cadastre contatos dos clientes com **consentimento e origem** (Cadastros → cliente → Comunicação e cobrança).
+
+Operação:
+- Logs: `dc logs -f whatsapp`. Pausa de emergência: envie `pausar` do seu número (ou use o botão de configuração).
+- Sessão perdida (desconectado no celular): reabra a tela e leia o QR novamente.
+- Trocar de número: `dc stop whatsapp`, `docker volume rm kscentral_whatsapp`, `dc up -d whatsapp`, ler o QR.
+- Nunca rode dois `whatsapp_worker` para o mesmo número (a trava no Redis impede no mesmo ambiente).
+
+## 13. Monitoramento de sistemas
+
+**Monitoramento → Sistema**: URL, status HTTP esperado, texto esperado (opcional), intervalo, limite de lentidão,
+falhas seguidas para alertar, alerta no WhatsApp e vínculo ao contrato. O `beat` verifica a cada minuto os sistemas
+vencidos. Cadastre também o próprio KS CENTRAL num monitor **externo** (o monitor interno não avisa se ele cair).
+
+## 14. Atualizações
+
+Por tag (padrão): ver seção 2. O `scripts/deploy.sh <tag>` faz backup, `pull` de `web worker beat whatsapp`,
+`up -d --no-build` e `check --deploy`.
+
+Segredos do workflow (GitHub → Settings → Environments → `producao`): `VPS_HOST`, `VPS_USER` (`ks`),
+`VPS_SSH_KEY` (chave dedicada; a pública em `~ks/.ssh/authorized_keys`).
+
+Manual:
+
+```bash
+cd /srv/kscentral && git fetch --tags && git checkout v1.4.0
+./scripts/deploy.sh v1.4.0
+```
+
+## 15. Backups e restauração
+
+`scripts/backup.sh` gera `pg_dump` + mídia, cifrados com AES-256 (`BACKUP_PASSPHRASE`), retenção 30 diários +
+12 mensais, e envia ao destino `rclone` se `BACKUP_RCLONE_REMOTE` estiver definido.
 
 ```bash
 crontab -e
 15 2 * * * cd /srv/kscentral && ./scripts/backup.sh >> /srv/kscentral/backups/backup.log 2>&1
 ```
 
-Configurar o destino externo (exemplo Nextcloud via WebDAV):
+Teste mensal (não toca a produção): `./scripts/restore.sh backups/diario/<arquivo>.tar.gz.enc --teste`.
+Desastre: `./scripts/restore.sh backups/diario/<arquivo>.tar.gz.enc` (digite `RESTAURAR`).
+
+> A sessão do WhatsApp **não** entra no backup: após restaurar em outra VPS, leia o QR de novo.
+> Guarde `BACKUP_PASSPHRASE` e `FIELD_ENCRYPTION_KEY` fora da VPS. Documentos fiscais têm retenção de 5 anos.
+
+## 16. Logs e observabilidade
 
 ```bash
-rclone config   # crie o remote "nextcloud" (tipo webdav, vendor nextcloud)
-# no .env:  BACKUP_RCLONE_REMOTE=nextcloud:kscentral-backups
+dc logs -f web
+dc logs -f worker beat
+dc logs -f whatsapp
+dc exec worker celery -A config inspect active
 ```
 
-**Teste de restauração mensal** (o painel lembra no dia 5 de cada mês) — restaura num banco temporário e não toca a produção:
+- `/health` verifica banco e cache.
+- **Configurações → Logs de integração**: chamadas E&L, Asaas, BrasilAPI etc., com segredos mascarados.
+- `SENTRY_DSN` habilita Sentry (sem PII).
 
-```bash
-./scripts/restore.sh backups/diario/kscentral_AAAA-MM-DD_HHMM.tar.gz.enc --teste
-```
-
-Anote o tempo exibido no diário de operação.
-
-**Restauração real** (desastre):
-
-```bash
-./scripts/restore.sh backups/diario/kscentral_AAAA-MM-DD_HHMM.tar.gz.enc
-# digite RESTAURAR para confirmar
-```
-
-> Guarde `BACKUP_PASSPHRASE` e `FIELD_ENCRYPTION_KEY` **fora da VPS** (cofre de senhas). Sem elas, o backup não abre e os segredos do banco não podem ser lidos.
-
-Retenção fiscal: documentos fiscais (XML/PDF de notas) devem ser preservados por 5 anos; o sistema impede a exclusão nesse prazo.
-
-## 9. Monitoramento, logs e Sentry
-
-- **Saúde:** `GET /health` (usado pelo healthcheck do Docker). Recomenda-se cadastrar o próprio KS CENTRAL em um monitor externo.
-- **Logs** (JSON, `structlog`):
-
-  ```bash
-  dc logs -f web
-  dc logs -f worker beat
-  dc logs --since 1h worker | grep -i erro
-  ```
-
-- **Sentry:** defina `SENTRY_DSN` (erros de Django e Celery). `send_default_pii` está desligado (LGPD).
-- **Integrações externas:** cada chamada (Sefin, E&L, Gemini, BrasilAPI) fica em **Configurações → Logs de integração**, com segredos mascarados.
-- **Celery:** `dc exec worker celery -A config inspect active`; agendamentos em `/admin/django_celery_beat/`.
-
-## 10. Rollback
+## 17. Rollback
 
 ```bash
 cd /srv/kscentral
-git checkout v1.2.0               # versão anterior
-./scripts/deploy.sh v1.2.0
+git checkout v1.3.0
+./scripts/deploy.sh v1.3.0
 ```
 
-Se a versão nova aplicou migrações incompatíveis, restaure o backup feito automaticamente no início do deploy (seção 8) **antes** de subir a versão anterior.
+Se a versão nova aplicou migrações incompatíveis, restaure o backup feito no início do deploy **antes** de subir a
+versão anterior. Ciclos de faturamento já transmitidos continuam válidos: consulte-os, não reenvie.
 
-## 11. Solução de problemas
+## 18. Solução de problemas
 
 | Sintoma | Causa provável | Ação |
 |---|---|---|
-| Caddy não emite certificado | DNS ainda não propagou ou porta 80 fechada | `dig central.kstec.online`, `ufw status`, `dc logs caddy` |
-| `web` não fica healthy | Erro de migração ou `.env` incompleto | `dc logs web`; `prod.py` exige `FIELD_ENCRYPTION_KEY` |
-| `400 Bad Request` | Host fora de `DJANGO_ALLOWED_HOSTS` | Ajuste o `.env` e `dc up -d` |
-| `403 CSRF` no login | `DJANGO_CSRF_TRUSTED_ORIGINS` sem `https://` | Ajuste o `.env` |
-| Usuário bloqueado após senhas erradas | `django-axes` (5 tentativas/1h) | `dc exec web python manage.py axes_reset_username email@x` |
-| Usuário perdeu o celular do MFA | — | Administrador: `/admin/otp_totp/totpdevice/` → excluir dispositivo; o usuário reconfigura no próximo login |
-| NFS-e `E999` na Sefin | CNPJ não habilitado para API ou assinatura inválida | Ver plano 6.13; `testar_sefin`; conferir certificado |
-| Erro ao abrir segredo (`InvalidToken`) | `FIELD_ENCRYPTION_KEY` trocada | Restaurar a chave original |
-| Tarefas agendadas não rodam | `beat` parado | `dc ps beat`, `dc restart beat` |
-| PDF sem fontes | Fontes ausentes na imagem | A imagem inclui DejaVu; Manrope/JetBrains são carregadas por CSS |
-| Disco cheio | Logs Docker / backups | `docker system prune`, revisar retenção, `du -sh backups` |
+| Caddy sem certificado | DNS não propagou / porta 80 fechada | `dig`, `ufw status`, `dc logs caddy` |
+| `web` não fica healthy | `.env` incompleto ou migração falhou | `dc logs web`; `prod.py` exige `FIELD_ENCRYPTION_KEY` |
+| `400` / `403 CSRF` | Host ou origem ausente | `DJANGO_ALLOWED_HOSTS`, `DJANGO_CSRF_TRUSTED_ORIGINS` com `https://` |
+| `InvalidToken` ao abrir segredos | `FIELD_ENCRYPTION_KEY` diferente | Restaurar a chave original |
+| Ciclos **Bloqueados** em massa | Percentuais fiscais fora da vigência, A1 vencido, saldo/vigência do contrato | Ver mensagem do ciclo; corrigir e clicar **Emitir agora** |
+| Ciclo em **Transmitido** por muito tempo | Emissor sem resposta | Consulta automática a cada 10 min; após 3 dias, consultar a DPS manualmente |
+| Agendamentos não rodam | `beat` parado ou Redis fora | `dc ps beat redis`, `dc restart beat` |
+| WhatsApp "Worker desligado" | Serviço parado | `dc ps whatsapp`, `dc logs whatsapp`, `dc restart whatsapp` |
+| WhatsApp não envia a clientes | Fora da janela, limite atingido, fila pausada, contato sem consentimento | Painel WhatsApp (ritmo seguro), enviar `retomar` |
+| Webhook Asaas `401` | Token diferente | Copiar novamente o token da tela de configuração |
+| Usuário bloqueado | `django-axes` | `dc exec web python manage.py axes_reset_username email@x` |
+| MFA perdido | — | `/admin/otp_totp/totpdevice/` → excluir dispositivo |
 
-## 12. Checklist de go-live
+## 19. Checklist de go-live
 
-- [ ] DNS + HTTPS funcionando; `check --deploy` sem erros.
-- [ ] `.env` com todos os segredos; cópia de `FIELD_ENCRYPTION_KEY` e `BACKUP_PASSPHRASE` no cofre.
-- [ ] `seed_inicial` executado; dados da empresa conferidos (IM, regime, CNAE).
-- [ ] Administrador com MFA ativo; usuários criados com papéis corretos.
-- [ ] Backup diário agendado; **restauração de teste** executada e cronometrada.
-- [ ] Sentry recebendo eventos (forçar um erro de teste).
-- [ ] Certificado A1 carregado; `testar_sefin` OK em produção restrita.
-- [ ] Protocolo fiscal 6.14.6 executado e `canal_padrao` definido.
-- [ ] Sistemas monitorados cadastrados e verificações aparecendo.
-- [ ] Certidões vigentes carregadas.
+- [ ] Tag publicada pelo CI; `check --deploy` sem erros; HTTPS ok.
+- [ ] `.env` completo; `FIELD_ENCRYPTION_KEY` e `BACKUP_PASSPHRASE` no cofre.
+- [ ] Dados: seção 8A **ou** 8B concluída e conferida; NFS-e real visível com PDF.
+- [ ] Usuários com papéis e MFA.
+- [ ] Configuração fiscal com checklist verde e percentuais da competência vigente.
+- [ ] Beat listando as tarefas de faturamento, WhatsApp e monitoramento.
+- [ ] Primeira agenda no modo **Confirmar** e prévia conferida.
+- [ ] Asaas testado no Sandbox (cobrança, pagamento, webhook, baixa) antes da produção.
+- [ ] WhatsApp conectado, teste recebido, comandos respondendo; contatos com consentimento.
+- [ ] Sistemas monitorados cadastrados; monitor externo do próprio KS CENTRAL.
+- [ ] Backup agendado e restauração de teste executada.
 
-## 13. Referência: variáveis de ambiente
+## 20. Referência: variáveis de ambiente
 
 | Variável | Obrigatória | Descrição |
 |---|---|---|
-| `DJANGO_SETTINGS_MODULE` | sim | `config.settings.prod` na VPS |
+| `DJANGO_SETTINGS_MODULE` | sim | `config.settings.prod` |
 | `DJANGO_SECRET_KEY` | sim | Chave do Django |
-| `DJANGO_ALLOWED_HOSTS` | sim | Ex.: `central.kstec.online` |
-| `DJANGO_CSRF_TRUSTED_ORIGINS` | sim | Ex.: `https://central.kstec.online` |
-| `SITE_URL` | sim | URL pública (links de orçamento e status) |
-| `DOMINIO`, `ACME_EMAIL` | sim | Usados pelo Caddy |
-| `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD` | sim | Banco |
-| `DATABASE_URL` | sim | `postgres://kscentral:<senha>@db:5432/kscentral` |
-| `REDIS_URL` | sim | `redis://redis:6379/0` |
-| `FIELD_ENCRYPTION_KEY` | sim | Chave Fernet dos segredos |
+| `DJANGO_ALLOWED_HOSTS` / `DJANGO_CSRF_TRUSTED_ORIGINS` | sim | `central.kstec.online` / `https://central.kstec.online` |
+| `SITE_URL` | sim | URL pública https (links, avisos, webhook) |
+| `DOMINIO`, `ACME_EMAIL` | sim | Caddy |
+| `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `DATABASE_URL` | sim | Banco |
+| `REDIS_URL` | sim | `redis://redis:6379/0` (cache, travas, broker) |
+| `FIELD_ENCRYPTION_KEY` | sim | Chave Fernet dos segredos (A1, tokens, Asaas) |
 | `EMAIL_URL`, `DEFAULT_FROM_EMAIL` | sim | SMTP |
+| `WHATSAPP_SESSAO` | não | Caminho da sessão neonize (no compose: `/app/data/whatsapp/sessao.sqlite3`) |
+| `NFSE_AMBIENTE` | sim | Ambiente sugerido na configuração fiscal |
 | `SENTRY_DSN` | não | Observabilidade |
-| `GEMINI_API_KEY`, `GEMINI_MODEL` | não | IA nos relatórios |
+| `GEMINI_API_KEY`, `GEMINI_MODEL` | não | IA |
 | `STORAGE_BACKEND` (+ `AWS_*`) | não | `local` ou `s3` |
-| `NFSE_AMBIENTE` | sim | Ambiente padrão sugerido na configuração fiscal |
 | `MFA_OBRIGATORIO` | não | `True` (padrão) |
 | `BACKUP_DIR`, `BACKUP_PASSPHRASE`, `BACKUP_RCLONE_REMOTE` | sim/sim/não | Backups |
-| `KS_IMAGE` | não | Imagem a usar (definida pelo `deploy.sh`) |
+| `KS_IMAGE` | não | Definida pelo `deploy.sh` |
+| `KSCENTRAL_REDIS`, `KSCENTRAL_EMAIL_REAL` | — | Apenas perfil local |
 
-## 14. Referência: comandos de gestão e tarefas agendadas
+## 21. Referência: comandos e tarefas agendadas
 
-| Comando | Função |
+| Comando (`dc exec web python manage.py …`) | Função |
 |---|---|
-| `seed_inicial` | Empresa KS TEC, papéis, categorias financeiras, tipos de certidão, prompts de IA |
-| `importar_tabelas_fiscais <xlsx...>` | LC 116, cTribNac, NBS, correlação IBS/CBS |
-| `importar_nfse_el <xml\|zip...>` | Histórico do portal E&L |
-| `gerar_competencias` | Cria competências faltantes dos contratos vigentes |
-| `testar_sefin` | Chamada autenticada (mTLS) em produção restrita |
-| `recalcular_sla <AAAA-MM>` | Reprocessa agregados de SLA |
+| `seed_inicial` | Empresa, papéis, categorias, tipos de certidão |
+| `importar_tabelas_fiscais <xlsx…>` | LC 116, cTribNac, NBS, correlações |
+| `importar_servicos_municipais <arq> --municipio --fonte [--confirmar-codigos]` | Referências municipais |
+| `importar_nfse_nacional <xml> --cnpj --canal` | Importa NFS-e autorizada (sem emitir) |
+| `importar_nfse_adn [--desde AAAA-MM-DD] [--simular] [--ignorar N]` | Sincroniza do ADN as NFS-e emitidas pela empresa (inclusive no portal), com canceladas |
+| `consultar_dps_el <idDPS> --ambiente 1` | Consulta DPS no canal E&L (sem emitir) |
+| `diagnosticar_nfse <pfx>` | Valida A1 e acesso às documentações (sem emitir) |
+| `gerar_competencias` | Competências faltantes dos contratos |
+| `whatsapp_worker [--simulado] [--uma-vez]` | Processo do WhatsApp (já roda como serviço) |
 
-Tarefas do Celery beat (editáveis em `/admin/django_celery_beat/periodictask/`):
+Tarefas do beat (editáveis em `/admin/django_celery_beat/periodictask/`):
 
 | Tarefa | Frequência |
 |---|---|
+| `faturamento.planejar_ciclos` | diária 00:40 |
+| `faturamento.processar_ciclos` | a cada 15 min |
+| `faturamento.acompanhar_transmissoes` | a cada 10 min |
+| `mensageria.rotinas_whatsapp` (lembretes, resumo, expiração) | a cada 10 min |
 | `sla.despachar_verificacoes` | 1 min |
-| `sla.agregar_dia` / `sla.limpar_brutos` | diária 00:15 / 03:00 |
-| `sla.verificar_ssl_todos` | diária 06:00 |
-| `certidoes.alertar_vencimentos` | diária 07:00 |
-| `fiscal.alertar_certificado` | diária 07:05 |
-| `fiscal.criar_guias_iss` | dia 1, 08:00 |
-| `fiscal.verificar_adn` | de hora em hora |
-| `contratos.alertar_vigencia_saldo` | diária 07:10 |
-| `financeiro.marcar_atrasados` / `gerar_recorrencias` | diária 00:30 / 00:35 |
-| `comercial.expirar_orcamentos` / `followup` | diária 09:00 / 09:05 |
-| `relatorios.lembrete_competencia` | dia 1, 09:00 |
-| `ia.verificar_limite_custo` | diária 08:00 |
-| `core.lembrete_teste_restauracao` | mensal (dia 5) |
+| `sla.limpar_brutos` / `sla.verificar_ssl_todos` | 03:00 / 06:00 |
+| `certidoes.alertar_vencimentos` | 07:00 |
+| `contratos.alertar_vigencia_saldo` | 07:10 |
+| `financeiro.marcar_atrasados` / `gerar_recorrencias` | 00:30 / 00:35 |
+| `comercial.expirar_orcamentos` / `followup` | 09:00 / 09:05 |
+| `core.lembrete_teste_restauracao` | dia 5, 08:30 |
+
+## 22. Ambiente local nesta máquina
+
+```powershell
+cd "C:\Users\KS TEC\sistema_kstec_"
+.venv\Scripts\python.exe manage.py migrate --settings=config.settings.local
+.venv\Scripts\python.exe manage.py runserver 127.0.0.1:8000 --noreload --settings=config.settings.local
+# Acesse http://localhost:8000/ (use localhost: em 127.0.0.1 há service worker de outro sistema)
+```
+
+- Sem Redis: tarefas síncronas; use **Faturamento → Executar rotina agora** e **WhatsApp → Rodar rotinas**.
+- Com Redis local (Memurai, WSL ou `docker run -p 6379:6379 redis:7-alpine`): defina `KSCENTRAL_REDIS=True` no
+  `.env`, rode `.\scripts\iniciar_workers.ps1` (Celery worker `-P solo`, beat e WhatsApp; logs em `.\logs`) e reinicie o
+  `runserver` para compartilhar o mesmo cache/travas. `-ZapSimulado` testa o WhatsApp sem conectar o celular.
+- O `runserver` usa `--noreload`: reinicie após mudar código Python. Identifique o processo pelo caminho antes de
+  encerrar — não pare servidores de outros projetos.

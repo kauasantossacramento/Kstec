@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block titulo %}E-mails do sistema{% endblock %}
+{% block breadcrumb %}{% icone "chevron-right" 14 %}<a href="{% url 'core:configuracoes' %}">Configurações</a>{% icone "chevron-right" 14 %}<span class="atual">E-mails</span>{% endblock %}
+{% block h1 %}E-mails do sistema{% endblock %}
+{% block subtitulo %}<p class="sub">Contas usadas para enviar alertas e para disparar notas fiscais e documentos aos clientes. Senhas cifradas no banco.</p>{% endblock %}
+{% block conteudo %}
+{% if not real %}<div class="alerta warning">{% icone "info" 18 %}<div class="small">Neste ambiente os envios são simulados (perfil local/teste). Em produção, as contas ativas abaixo enviam de verdade.</div></div>{% endif %}
+<div class="grid g-2">
+{% for b in blocos %}
+  <form method="post" class="card" novalidate>{% csrf_token %}
+    <input type="hidden" name="finalidade" value="{{ b.valor }}">
+    <div class="card-cab"><h3>{% if b.valor == "ALERTAS" %}{% icone "bell" 16 %}{% else %}{% icone "receipt" 16 %}{% endif %} {{ b.rotulo }}</h3>
+      {% if b.conta.pk and b.conta.ativo %}{% status_badge "success" rotulo="Ativa" %}{% else %}{% status_badge "neutral" rotulo="Inativa" %}{% endif %}</div>
+    {% if b.conta.ultimo_erro %}<div class="alerta danger">{% icone "alert" 16 %}<div class="small">Último erro: {{ b.conta.ultimo_erro }}</div></div>
+    {% elif b.conta.testado_em %}<p class="small" style="color:var(--success)">{% icone "check" 14 %} Testada em {{ b.conta.testado_em|date:"d/m/Y H:i" }}</p>{% endif %}
+    {% include "components/form_campos.html" with form=b.form %}
+    <p class="xs muted" style="margin-top:8px">Hostinger: servidor <code>smtp.hostinger.com</code>, porta <strong>587 com STARTTLS</strong> (o servidor Hetzner bloqueia a porta 465). {% if b.conta.senha_id %}Senha cadastrada.{% else %}Sem senha cadastrada.{% endif %}</p>
+    {% if pode_salvar %}<div class="form-acoes">
+      {% if b.conta.pk %}<button class="btn" type="submit" name="testar" value="1" formnovalidate>{% icone "send" 16 %} Enviar teste para {{ request.user.email }}</button>{% endif %}
+      <button class="btn btn-primario" type="submit">{% icone "check" 16 %} Salvar</button></div>{% endif %}
+  </form>
+{% endfor %}
+</div>
+{% endblock %}

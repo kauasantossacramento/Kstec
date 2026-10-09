@@ -1,0 +1,5 @@
+{% if sistemas %}
+<div class="sistemas">{% for s in sistemas %}{% include "sla/_sistema_card.html" %}{% endfor %}</div>
+{% else %}
+<div class="card">{% url 'sla:sistema_novo' as url_novo %}{% empty_state "Nenhum sistema monitorado vinculado a este contrato." url_novo "Adicionar sistema" %}</div>
+{% endif %}

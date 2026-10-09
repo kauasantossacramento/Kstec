@@ -1,0 +1,83 @@
+{% extends "base.html" %}{% load static %}
+{% block titulo %}{% if agenda %}Editar agenda{% else %}Nova agenda de faturamento{% endif %}{% endblock %}
+{% block scripts %}{{ block.super }}<script src="{% static 'js/wizard.js' %}" defer></script>{% endblock %}
+{% block breadcrumb %}{% icone "chevron-right" 14 %}<a href="{% url 'faturamento:home' %}">Faturamento</a>{% icone "chevron-right" 14 %}<span class="atual">{% if agenda %}{{ agenda.contrato.numero }}{% else %}Nova agenda{% endif %}</span>{% endblock %}
+{% block h1 %}{% if agenda %}Editar agenda · {{ agenda.contrato.numero }}{% else %}Nova agenda de faturamento{% endif %}{% endblock %}
+{% block subtitulo %}<p class="sub">Programe a emissão mensal da NFS-e do contrato. Nada é transmitido ao salvar.</p>{% endblock %}
+{% block conteudo %}
+{{ contratos|json_script:"dados-contratos" }}
+<form method="post" class="wizard" data-wizard data-agenda data-passo-inicial="{{ passo_inicial }}" novalidate>
+  {% csrf_token %}
+  {% if agenda %}<input type="hidden" name="agenda_pk" value="{{ agenda.pk }}">{% endif %}
+  <div class="card">
+    <nav class="stepper" aria-label="Etapas">
+      {% for p in form.passos %}<button type="button" class="passo{% if p.erros %} erro{% endif %}" data-ir-passo="{{ p.numero }}">{{ p.titulo }}</button>{% endfor %}
+    </nav>
+    {% if form.non_field_errors %}<div class="alerta danger">{% icone "alert" 18 %}<div>{% for e in form.non_field_errors %}{{ e }}<br>{% endfor %}</div></div>{% endif %}
+    {% for p in form.passos %}
+    <section class="wizard-passo" data-passo="{{ p.numero }}" aria-labelledby="passo-{{ p.numero }}">
+      <div class="cab"><span class="ico-bolha">{% icone p.icone 20 %}</span><div><h2 id="passo-{{ p.numero }}">{{ p.titulo }}</h2><p>{{ p.descricao }}</p></div></div>
+      <div class="form-grid">
+        {% for c in p.campos %}
+          {% if c.opcoes %}
+          <fieldset class="campo inteiro" style="border:0;padding:0;margin:0" id="campo-{{ c.bf.name }}">
+            <legend style="font-weight:600;font-size:var(--fs-sm);color:var(--ink-2);margin-bottom:6px">{{ c.bf.label|capfirst }}</legend>
+            <div class="opcoes">
+              {% for o in c.opcoes %}
+              <label class="opcao" for="{{ o.id }}">
+                <input type="radio" name="{{ c.bf.html_name }}" id="{{ o.id }}" value="{{ o.valor }}"{% if o.checked %} checked{% endif %} required>
+                <span class="marca-op" aria-hidden="true"></span>
+                <span><span class="titulo">{{ o.rotulo }}</span><span class="desc">{{ o.desc }}</span></span>
+                {% if o.recomendado %}<span class="badge badge-info tag">Recomendado</span>{% endif %}
+              </label>
+              {% endfor %}
+            </div>
+            {% for e in c.bf.errors %}<span class="erro">{{ e }}</span>{% endfor %}
+          </fieldset>
+          {% else %}
+            {% include "components/campo.html" with campo=c.bf largo=c.largo mostrar_se=c.mostrar_se %}
+            {% if c.placeholders %}
+            <div class="placeholders inteiro" style="margin-top:-6px" aria-label="Inserir campo automático">
+              <button type="button" data-inserir="{competencia}" data-alvo="id_discriminacao">{competencia}</button>
+              <button type="button" data-inserir="{mes_extenso}" data-alvo="id_discriminacao">{mes_extenso}</button>
+              <button type="button" data-inserir="{mes_nome}" data-alvo="id_discriminacao" title="Ex.: Junho">{mes_nome}</button>
+              <button type="button" data-inserir="{parcela2} de {total_parcelas}" data-alvo="id_discriminacao" title="Ex.: 01 de 12">{parcela2} de {total_parcelas}</button>
+              <button type="button" data-inserir="{parcela}º mês" data-alvo="id_discriminacao" title="Ex.: 3º mês de execução">{parcela}º mês</button>
+              <button type="button" data-inserir="{valor}" data-alvo="id_discriminacao">{valor}</button>
+              <button type="button" data-inserir="{contrato}" data-alvo="id_discriminacao">{contrato}</button>
+              <button type="button" data-inserir="{empenho}" data-alvo="id_discriminacao">{empenho}</button>
+              <button type="button" data-inserir="{objeto}" data-alvo="id_discriminacao">{objeto}</button>
+            </div>
+            {% endif %}
+          {% endif %}
+        {% endfor %}
+      </div>
+      {% if p.numero == 4 %}<div class="alerta" style="margin-top:16px">{% icone "shield" 18 %}<div class="small">Proteções sempre ativas: uma nota por competência; validação fiscal antes de qualquer envio; resultado incerto é apenas consultado, nunca reenviado; saldo contratual e vigência conferidos a cada emissão.</div></div>{% endif %}
+    </section>
+    {% endfor %}
+    <div class="wizard-nav">
+      <a class="btn btn-fantasma" href="{% if agenda %}{% url 'faturamento:agenda' agenda.pk %}{% else %}{% url 'faturamento:home' %}{% endif %}">Cancelar</a>
+      <span class="progresso-txt" data-wizard-progresso></span>
+      <div class="linha">
+        <button type="button" class="btn" data-wizard-anterior hidden>{% icone "chevron-right" 16 "girar" %} Voltar</button>
+        <button type="button" class="btn btn-primario" data-wizard-proximo>Continuar {% icone "chevron-right" 16 %}</button>
+        <button type="submit" class="btn btn-primario" data-wizard-salvar>{% icone "check" 16 %} {% if agenda %}Salvar alterações{% else %}Criar agenda{% endif %}</button>
+      </div>
+    </div>
+  </div>
+  <aside class="wizard-lateral">
+    <div class="card" data-contexto-contrato hidden>
+      <div class="card-cab"><h3>{% icone "file-text" 16 %} Contrato <span class="mono" data-ctx="numero"></span></h3></div>
+      <div class="contexto-contrato">
+        <div class="linha-ctx"><span>Cliente</span><strong data-ctx="cliente"></strong></div>
+        <div class="linha-ctx"><span>Valor mensal</span><span class="mono" data-ctx="mensal"></span></div>
+        <div class="linha-ctx"><span>Saldo</span><span class="mono" data-ctx="saldo"></span></div>
+        <div class="linha-ctx"><span>Vigência</span><span data-ctx="vigencia"></span></div>
+      </div>
+    </div>
+    <div class="card" hx-post="{% url 'faturamento:simular' %}" hx-trigger="load, change from:closest form delay:300ms, keyup changed from:closest form delay:800ms" hx-swap="innerHTML" aria-live="polite">
+      <h3>{% icone "eye" 16 %} Prévia</h3><p class="muted small">Preencha o contrato e o calendário para ver as próximas emissões.</p>
+    </div>
+  </aside>
+</form>
+{% endblock %}

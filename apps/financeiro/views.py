@@ -30,7 +30,7 @@ categorias = Crud(CategoriaFinanceira, "categoria", "financeiro", [Coluna("Nome"
     Coluna("Tipo", "tipo"), Coluna("Grupo", "grupo_dre")], caminho="categorias", feminino=True,
     form_class=CategoriaForm, papeis_escrita=["Financeiro"], papeis_leitura=PAPEIS)
 centros = Crud(CentroCusto, "centro", "financeiro", [Coluna("Nome", "nome", link=True), Coluna("Contrato", "contrato")],
-    caminho="centros", fields=["nome"], papeis_escrita=["Financeiro"], papeis_leitura=PAPEIS)
+    caminho="centros", fields=["nome", "ratear", "ativo"], papeis_escrita=["Financeiro"], papeis_leitura=PAPEIS)
 crud = Crud(Lancamento, "lancamento", "financeiro", [Coluna("Descrição", "descricao", link=True),
     Coluna("Tipo", "tipo"), Coluna("Vencimento", "data_vencimento", "data"),
     Coluna("Valor", "valor", "brl"), Coluna("Situação", "status", "status", entidade="Lancamento")],

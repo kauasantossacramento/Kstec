@@ -1,0 +1,8 @@
+<div class="regra">
+  <span class="ico-bolha">{% icone "repeat" 18 %}</span>
+  <p>Todo dia <strong>{{ a.dia_emissao }}</strong>{% if a.dia_util %} <span class="muted">(ou o próximo dia útil)</span>{% endif %}{% if a.hora_emissao %}, a partir das <strong>{{ a.hora_emissao|time:"H:i" }}</strong>{% endif %},
+  o sistema {% if a.modo == "RASCUNHO" %}<strong>prepara um rascunho</strong> da{% elif a.modo == "CONFIRMAR" %}<strong>prepara e pede sua confirmação</strong> para transmitir a{% else %}<strong>transmite automaticamente</strong> a{% endif %}
+  NFS-e da competência <strong>{% if a.referencia == "MES_ANTERIOR" %}do mês anterior{% else %}do próprio mês{% endif %}</strong>{% if a.valor %} no valor de <strong class="mono">{{ a.valor|brl }}</strong>{% endif %},
+  com vencimento {% if a.tipo_vencimento == "DIA_FIXO" %}no dia <strong>{{ a.dia_vencimento|default:"—" }}</strong>{% else %}em <strong>{{ a.prazo_dias }} dias</strong>{% endif %}.
+  {% if a.enviar_whatsapp or a.gerar_cobranca %}<br><span class="small muted">Depois da autorização: {% if a.gerar_cobranca %}gera cobrança Asaas (link e PIX){% endif %}{% if a.gerar_cobranca and a.enviar_whatsapp %} e {% endif %}{% if a.enviar_whatsapp %}envia nota{% if a.gerar_cobranca %} e cobrança{% endif %} ao cliente pelo WhatsApp{% endif %}.</span>{% endif %}</p>
+</div>

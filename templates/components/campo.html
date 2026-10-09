@@ -1,5 +1,5 @@
 {% if campo.is_hidden %}{{ campo }}{% else %}
-<div class="campo{% if campo.errors %} tem-erro{% endif %}{% if campo.field.widget.input_type == 'checkbox' %} campo-check{% endif %}{% if campo.field.widget.attrs.rows or largo %} inteiro{% endif %}" id="campo-{{ campo.name }}">
+<div class="campo{% if campo.errors %} tem-erro{% endif %}{% if campo.field.widget.input_type == 'checkbox' %} campo-check{% endif %}{% if campo.field.widget.attrs.rows or largo %} inteiro{% endif %}" id="campo-{{ campo.name }}"{% if mostrar_se %} data-mostrar-se="{{ mostrar_se }}"{% endif %}>
   {% if campo.field.widget.input_type == 'checkbox' %}{{ campo }}<label for="{{ campo.id_for_label }}">{{ campo.label }}</label>
   {% else %}<label for="{{ campo.id_for_label }}">{{ campo.label }}{% if campo.field.required %} <span aria-hidden="true" style="color:var(--danger)">*</span>{% endif %}</label>{{ campo }}{% endif %}
   {% if campo.help_text %}<span class="ajuda">{{ campo.help_text }}</span>{% endif %}

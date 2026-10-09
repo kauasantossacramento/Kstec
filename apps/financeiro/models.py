@@ -119,6 +119,8 @@ class CentroCusto(ModeloBase):
     nome = models.CharField(max_length=150)
     contrato = models.OneToOneField("contratos.Contrato", null=True, blank=True, on_delete=models.PROTECT,
                                     related_name="centro_custo")
+    ratear = models.BooleanField("custo global rateado entre os contratos", default=True,
+                                 help_text="Só para centros sem contrato (ex.: Administrativo, infraestrutura comum).")
 
     class Meta:
         verbose_name = "centro de custo"

@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% block titulo %}Cobrança Asaas{% endblock %}
+{% block breadcrumb %}{% icone "chevron-right" 14 %}<a href="{% url 'core:configuracoes' %}">Configurações</a>{% icone "chevron-right" 14 %}<span class="atual">Asaas</span>{% endblock %}
+{% block h1 %}Cobrança Asaas{% endblock %}
+{% block subtitulo %}<p class="sub">Links de pagamento, boleto e PIX nas cobranças e nas mensagens aos clientes.</p>{% endblock %}
+{% block acoes %}<a class="btn" href="{% url 'cobranca:cobranca_lista' %}">{% icone "credit-card" 16 %} Cobranças</a>{% endblock %}
+{% block conteudo %}
+<div class="grid g-2-1">
+  <form method="post" class="card" novalidate>{% csrf_token %}
+    {% if form.non_field_errors %}<div class="alerta danger">{% icone "alert" 18 %}<div>{% for e in form.non_field_errors %}{{ e }}<br>{% endfor %}</div></div>{% endif %}
+    <div class="config-secao">
+      <div class="lado"><h3>Conta</h3><p>Use o Sandbox para testar sem movimentar dinheiro. A chave é guardada cifrada.</p></div>
+      <div class="form-grid">
+        {% include "components/campo.html" with campo=form.ativo largo=True %}
+        {% include "components/campo.html" with campo=form.ambiente %}
+        {% include "components/campo.html" with campo=form.nova_api_key %}
+      </div>
+    </div>
+    <div class="config-secao">
+      <div class="lado"><h3>Cobrança</h3><p>Valores padrão; cada cliente pode ter a própria forma de pagamento.</p></div>
+      <div class="form-grid">
+        {% include "components/campo.html" with campo=form.forma_padrao largo=True %}
+        {% include "components/campo.html" with campo=form.multa_pct %}
+        {% include "components/campo.html" with campo=form.juros_mes_pct %}
+      </div>
+    </div>
+    <div class="config-secao">
+      <div class="lado"><h3>Baixa</h3><p>Quando o Asaas confirmar o pagamento, o lançamento pode ser baixado sozinho.</p></div>
+      <div class="form-grid">
+        {% include "components/campo.html" with campo=form.baixa_automatica largo=True %}
+        {% include "components/campo.html" with campo=form.conta_recebimento largo=True %}
+      </div>
+    </div>
+    {% if pode_salvar %}
+    <div class="form-acoes">
+      {% if config.pk and config.api_key_id %}<button class="btn" type="submit" name="testar" value="1" formnovalidate>{% icone "zap" 16 %} Testar conexão</button>{% endif %}
+      <button class="btn btn-primario" type="submit">{% icone "check" 16 %} Salvar</button>
+    </div>
+    {% endif %}
+  </form>
+  <aside class="stack">
+    <section class="card">
+      <h3>{% icone "shield" 16 %} Situação</h3>
+      <dl class="defs" style="grid-template-columns:1fr;margin-top:8px">
+        <div><dt>Chave de API</dt><dd>{% if config.api_key_id %}<span class="badge badge-success"><span class="dot"></span>Cadastrada</span>{% else %}<span class="badge badge-warning"><span class="dot"></span>Pendente</span>{% endif %}</dd></div>
+        <div><dt>Conexão</dt><dd>{% if config.verificado_em %}{{ config.conta_nome|default:"Conta verificada" }} · {{ config.verificado_em|data_br }}{% else %}<span class="muted">Ainda não testada</span>{% endif %}</dd></div>
+      </dl>
+    </section>
+    {% if webhook_token %}
+    <section class="card">
+      <h3>{% icone "link" 16 %} Webhook</h3>
+      <p class="small muted">No Asaas: Integrações → Webhooks → Cobranças. Informe a URL e o token abaixo e ative os eventos de pagamento.</p>
+      <label class="small" for="wh-url"><strong>URL</strong></label>
+      <div class="linha" style="flex-wrap:nowrap"><input class="input mono" id="wh-url" value="{{ webhook_url }}" readonly><button class="btn btn-sm" type="button" data-copiar="{{ webhook_url }}">Copiar</button></div>
+      <label class="small" for="wh-token" style="margin-top:10px;display:block"><strong>Token de autenticação</strong></label>
+      <div class="linha" style="flex-wrap:nowrap"><input class="input mono" id="wh-token" type="password" value="{{ webhook_token }}" readonly><button class="btn btn-sm" type="button" data-copiar="{{ webhook_token }}">Copiar</button></div>
+      <p class="xs muted" style="margin-top:8px">Em produção a URL precisa ser HTTPS pública (SITE_URL).</p>
+    </section>
+    {% endif %}
+  </aside>
+</div>
+{% endblock %}

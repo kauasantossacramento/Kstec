@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% block titulo %}Custos{% endblock %}
+{% block breadcrumb %}{% icone "chevron-right" 14 %}<span class="atual">Custos</span>{% endblock %}
+{% block h1 %}Custos{% endblock %}
+{% block subtitulo %}<p class="sub">Custos por contrato e centro de custo, com os custos globais da empresa rateados {{ criterio }}.</p>{% endblock %}
+{% block acoes %}
+<a class="btn" href="{% url 'custos:exportar' %}?{{ querystring }}">{% icone "download" 16 %} Exportar XLSX</a>
+{% if pode_escrever %}
+<a class="btn" href="{% url 'financeiro:recorrencia_nova' %}?tipo=DESPESA">{% icone "repeat" 16 %} Custo recorrente</a>
+<a class="btn btn-primario" href="{% url 'financeiro:lancamento_novo' %}?tipo=DESPESA">{% icone "plus" 16 %} Lançar custo</a>
+{% endif %}
+{% endblock %}
+{% block conteudo %}
+<form method="get" class="filtros card" style="padding:14px 16px">
+  <label class="small muted" for="ini">De</label><input class="input" id="ini" type="date" name="inicio" value="{{ inicio|date:'Y-m-d' }}">
+  <label class="small muted" for="fim">até</label><input class="input" id="fim" type="date" name="fim" value="{{ fim|date:'Y-m-d' }}">
+  <select class="input select" name="contrato" aria-label="Contrato"><option value="">Todos os contratos</option>{% for c in contratos %}<option value="{{ c.pk }}"{% if contrato and contrato.pk == c.pk %} selected{% endif %}>{{ c.numero }} · {{ c.cliente|truncatechars:30 }}</option>{% endfor %}</select>
+  <button class="btn" type="submit">{% icone "search" 16 %} Aplicar</button>
+</form>
+
+<div class="grid g-4" style="margin:16px 0">
+  {% kpi_card "Custos no período" total_custos icone_nome="wallet" %}
+  {% kpi_card "Custos globais rateados" total_global icone_nome="repeat" %}
+  {% kpi_card "Receita dos contratos" total_receita icone_nome="trending-up" %}
+  {% kpi_card "Resultado" resultado alerta=False icone_nome="calculator" %}
+</div>
+
+<section style="margin-bottom:18px">
+  <div class="card-cab"><h2>Por contrato</h2><span class="small muted">Rateio {{ criterio }}</span></div>
+  <div class="tabela-wrap responsiva"><table class="tabela">
+    <thead><tr><th>Contrato</th><th class="num">Receita</th><th class="num">Custo direto</th><th class="num">Rateio global</th><th class="num">Custo total</th><th class="num">Resultado</th><th class="num">Margem</th></tr></thead>
+    <tbody>{% for x in linhas %}<tr>
+      <td data-rotulo="Contrato"><a href="{% url 'contratos:contrato_detalhe' x.contrato.pk %}"><strong>{{ x.contrato.numero }}</strong></a><br><span class="small muted">{{ x.contrato.cliente|truncatechars:34 }}</span></td>
+      <td data-rotulo="Receita" class="num mono">{{ x.receita|brl }}</td><td data-rotulo="Custo direto" class="num mono">{{ x.direto|brl }}</td>
+      <td data-rotulo="Rateio" class="num mono">{{ x.rateio|brl }}</td><td data-rotulo="Custo total" class="num mono">{{ x.custo_total|brl }}</td>
+      <td data-rotulo="Resultado" class="num mono"{% if x.resultado < 0 %} style="color:var(--danger)"{% endif %}>{{ x.resultado|brl }}</td>
+      <td data-rotulo="Margem" class="num mono">{% if x.margem is not None %}{{ x.margem }}%{% else %}—{% endif %}</td></tr>
+    {% empty %}<tr><td colspan="7" class="muted">Nenhum contrato com movimento no período.</td></tr>{% endfor %}</tbody>
+  </table></div>
+</section>
+
+<div class="grid g-2">
+  <section class="card">
+    <div class="card-cab"><h3>Por centro de custo</h3><a class="small" href="{% url 'financeiro:centro_lista' %}">Gerenciar centros</a></div>
+    {% for x in centros %}<div class="item-prev"><span class="ponto {% if x.rateado %}warning{% elif x.global %}neutral{% else %}info{% endif %}"></span>
+      <div><strong>{{ x.centro.nome }}</strong><div class="small muted">{% if x.rateado %}Global · rateado entre contratos{% elif x.global %}Global · não rateado{% else %}Contrato{% endif %} · pago {{ x.pago|brl }}</div></div>
+      <span class="valor">{{ x.valor|brl }}</span></div>
+    {% empty %}<p class="muted small">Nenhum custo lançado no período.</p>{% endfor %}
+    {% if nao_rateado %}<p class="xs muted" style="margin-top:8px">{{ nao_rateado|brl }} em centros globais marcados para não ratear.</p>{% endif %}
+  </section>
+  <section class="card">
+    <h3>Por categoria</h3>
+    {% for x in categorias %}<div class="linha entre small" style="padding:6px 0;border-bottom:1px solid var(--line)"><span>{{ x.categoria__nome }}</span><span class="mono">{{ x.valor|brl }}</span></div>
+    {% empty %}<p class="muted small">Sem custos no período.</p>{% endfor %}
+    <p class="xs muted" style="margin-top:10px">Custos globais (válidos para todos os contratos): lance no centro "Administrativo" ou crie outro centro sem contrato com "rateado entre os contratos".</p>
+  </section>
+</div>
+<section class="card" style="margin-top:16px">
+  <h3>Planilhas de custos dos contratos (BDI)</h3>
+  <p class="small muted">As planilhas mensais enviadas aos órgãos ficam na central de documentos.</p>
+  <a class="btn" href="{% url 'relatorios:home' %}?tipo=PLANILHA_CUSTOS">{% icone "file-text" 16 %} Abrir planilhas de custos</a>
+</section>
+{% endblock %}

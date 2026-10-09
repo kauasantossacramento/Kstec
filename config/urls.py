@@ -20,6 +20,12 @@ urlpatterns = [
     path("fiscal/", include("apps.fiscal.urls")),
     path("financeiro/", include("apps.financeiro.urls")),
     path("operacao/", include("apps.operacao.urls")),
+    path("faturamento/", include("apps.faturamento.urls")),
+    path("cobrancas/", include("apps.cobranca.urls")),
+    path("whatsapp/", include("apps.mensageria.urls")),
+    path("sla/", include("apps.sla.urls")),
+    path("relatorios/", include("apps.contratos.documentos")),
+    path("custos/", include("apps.financeiro.custos_views")),
     path("o/", include(("apps.comercial.urls_publico", "comercial_publico"))),
     path("", include("apps.painel.urls")),
 ]

@@ -299,3 +299,72 @@ def test_classificacao_nacional_incoerente_bloqueia_preparacao(preparado):
     with pytest.raises(ValidationError, match="corresponder"):
         emissao.validar_emissao(nota, config)
     assert not nota.tentativas.exists()
+
+
+def test_importacao_historica_preserva_valores_do_xml(preparado):
+    from apps.fiscal.models import SequenciaNumeracao, TentativaTransmissao
+    from apps.fiscal.services.importacao import importar_historica
+
+    nota, config = preparado
+    tentativa, a1 = emissao.preparar_tentativa(nota, config)
+    xml = gzip.decompress(base64.b64decode(resposta_nfse(tentativa, a1)["nfseXmlGZipB64"]))
+    antes = SequenciaNumeracao.objects.get().ultimo_numero
+    TentativaTransmissao.objects.filter(nota=nota).delete()
+    importada, criada = importar_historica(config.empresa, xml, gerar_receber=False)
+    assert criada and importada.pk != nota.pk and importada.status == "AUTORIZADA"
+    assert importada.numero_nfse == "123" and importada.valor_liquido == Decimal("1.00")
+    assert importada.tentativas.get().situacao == "IMPORTADA_AUTORIZADA"
+    assert importar_historica(config.empresa, xml)[1] is False
+    assert importar_historica(config.empresa, xml, cancelada=True)[0].status == "CANCELADA"
+    assert SequenciaNumeracao.objects.get().ultimo_numero == antes
+    config.empresa.cnpj = "11222333000181"
+    with pytest.raises(ValidationError):
+        importar_historica(config.empresa, xml)
+
+
+def test_dps_iss_retido_espelha_nota_autorizada_do_portal(preparado):
+    """Mesmos campos da NFS-e 2600000000007 (válida): regApTribSN=2, tpRetISSQN=2, sem pAliq, tomador com IM e endereço."""
+    from apps.core.models import Endereco
+
+    nota, config = preparado
+    tomador = nota.tomador
+    tomador.endereco = Endereco.objects.create(cep="45400000", logradouro="General Labatut", numero="S/N", bairro="Centro",
+                                               municipio_ibge="2932903", municipio_nome="Valença", uf="BA")
+    tomador.inscricao_municipal = "0000005082"
+    tomador.save()
+    nota.perfil.iss_retido = True
+    nota.perfil.save()
+    nota.valor_servicos = Decimal("4950")
+    salvar(nota)
+    assert (nota.valor_iss, nota.valor_iss_retido, nota.valor_liquido) == (Decimal("99.00"), Decimal("99.00"), Decimal("4851.00"))
+    emissao.validar_emissao(nota, config)
+    tentativa, _ = emissao.preparar_tentativa(nota, config)
+    dps = etree.fromstring(tentativa.dps_assinada.ler()).find(f"{{{NS}}}infDPS")
+    t = lambda c: dps.findtext("/".join(f"{{{NS}}}{x}" for x in c.split("/")))  # noqa: E731
+    assert t("prest/regTrib/regApTribSN") == "2" and t("valores/trib/tribMun/tpRetISSQN") == "2"
+    assert dps.find(f"{{{NS}}}valores/{{{NS}}}trib/{{{NS}}}tribMun/{{{NS}}}pAliq") is None
+    assert t("toma/IM") == "0000005082" and t("toma/end/endNac/cMun") == "2932903" and t("toma/end/xBairro") == "Centro"
+
+
+def test_iss_retido_exige_tomador_local(preparado):
+    nota, config = preparado
+    nota.perfil.iss_retido = True
+    nota.perfil.save()
+    salvar(nota)
+    with pytest.raises(ValidationError, match="município do emitente"):
+        emissao.validar_emissao(nota, config)
+
+
+def test_quebras_de_linha_normalizadas_como_no_emissor(preparado):
+    """O E&L autoriza com as quebras de linha da discriminação trocadas por espaço (NFS-e 2600000000013)."""
+    from apps.fiscal.services.documentos import conteudo
+
+    nota, config = preparado
+    nota.discriminacao = "Serviço mensal.\n\nChave PIX: 62501281000113"
+    salvar(nota)
+    tentativa, _ = emissao.preparar_tentativa(nota, config)
+    dps = etree.fromstring(tentativa.dps_assinada.ler())
+    assert dps.find(f".//{{{NS}}}xDescServ").text == "Serviço mensal. Chave PIX: 62501281000113"
+    a = etree.fromstring(b"<x><d>A\n\nB</d></x>")
+    b = etree.fromstring(b"<x><d>A B</d></x>")
+    assert conteudo(a) == conteudo(b)

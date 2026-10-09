@@ -29,6 +29,14 @@ MAPAS = {
     "Habilitacao": {"APTA": "success", "ATENCAO": "warning", "INAPTA": "danger"},
     "TentativaTransmissao": {"AUTORIZADA": "success", "REJEITADA": "danger", "ERRO_COMUNICACAO": "warning",
                              "INCONCLUSIVA": "warning", "EM_ANDAMENTO": "info"},
+    "CicloFaturamento": {"PROGRAMADO": "info", "BLOQUEADO": "danger", "RASCUNHO": "neutral", "AGUARDANDO": "warning",
+                         "TRANSMITIDO": "info", "AUTORIZADO": "success", "FALHA": "danger", "PULADO": "neutral"},
+    "CobrancaAsaas": {"PENDING": "warning", "RECEIVED": "success", "CONFIRMED": "success", "OVERDUE": "danger",
+                      "REFUNDED": "neutral", "RECEIVED_IN_CASH": "success", "DELETED": "neutral", "ERRO": "danger"},
+    "MensagemWhatsApp": {"RETIDA": "warning", "PENDENTE": "info", "ENVIANDO": "info", "ENVIADA": "success",
+                         "SIMULADA": "neutral", "FALHA": "danger", "CANCELADA": "neutral", "RECEBIDA": "info"},
+    "LoteEnvio": {"AGUARDANDO": "warning", "LIBERADO": "info", "CONCLUIDO": "success", "CANCELADO": "neutral",
+                  "EXPIRADO": "neutral"},
     "PlanilhaCusto": {"RASCUNHO": "neutral", "VIGENTE": "success", "ARQUIVADA": "neutral"},
 }
 

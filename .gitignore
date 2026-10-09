@@ -15,3 +15,6 @@ logs/
 backups/
 *.pfx
 *.p12
+
+# Documentos contratuais com dados pessoais (CPF) não vão para o Git
+docs/*.pdf

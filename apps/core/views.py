@@ -21,7 +21,17 @@ from django_otp.plugins.otp_totp.models import TOTPDevice
 from .busca import buscar
 from .crud import Coluna, Crud
 from .forms import FormKS, FormSimples
-from .models import Anexo, Empresa, LogAcesso, LogIntegracao, Notificacao, Parametro, Usuario
+from .models import (
+    Anexo,
+    ContaEmail,
+    Empresa,
+    LogAcesso,
+    LogIntegracao,
+    Notificacao,
+    Parametro,
+    Segredo,
+    Usuario,
+)
 from .permissoes import exigir_escrita
 from .services.brasilapi import ConsultaIndisponivel, consultar_cep, consultar_cnpj
 
@@ -176,10 +186,12 @@ def anexo_baixar(request, pk):
     if objeto is not None and objeto.__class__.__name__ in ("NotaFiscal", "Lancamento", "GuiaISS", "PlanilhaCustos", "ItemCusto", "EntregaNota"):
         if not request.user.tem_papel("Administrador", "Fiscal", "Financeiro", "Leitura"):
             raise PermissionDenied
-    if objeto is not None and objeto.__class__.__name__ == "RelatorioAtividades":
+    if objeto is not None and objeto.__class__.__name__ in ("RelatorioAtividades", "RelatorioSLA", "Contrato"):
+        from apps.contratos.models import Contrato
         from apps.contratos.views import contratos_visiveis
 
-        if not contratos_visiveis(request.user, objeto.contrato.__class__.objects.filter(empresa=request.empresa)).filter(pk=objeto.contrato_id).exists():
+        contrato_id = objeto.pk if isinstance(objeto, Contrato) else objeto.contrato_id
+        if not contratos_visiveis(request.user, Contrato.objects.filter(empresa=request.empresa)).filter(pk=contrato_id).exists():
             raise PermissionDenied
     LogAcesso.objects.create(
         usuario=request.user, acao="download", content_type=anexo.content_type, object_id=anexo.object_id,
@@ -326,3 +338,55 @@ def registrar_acesso(request, objeto, acao="visualizar", descricao=""):
 
 def exigir_admin(request):
     exigir_escrita(request.user, ["Administrador"])
+
+
+class ContaEmailForm(FormKS):
+    nova_senha = forms.CharField(label="Senha", required=False, widget=forms.PasswordInput(render_value=False),
+                                 help_text="Senha da caixa (ou de aplicativo). Em branco mantém a atual.")
+
+    class Meta:
+        model = ContaEmail
+        fields = ["ativo", "nome_remetente", "email", "host", "porta", "seguranca", "usuario", "copia_para"]
+
+
+@login_required
+def emails(request):
+    from .services.email import testar
+
+    if not request.user.tem_papel("Administrador", "Financeiro", "Fiscal", "Leitura"):
+        raise PermissionDenied
+    blocos = []
+    for valor, rotulo in ContaEmail.Finalidade.choices:
+        conta = ContaEmail.objects.filter(empresa=request.empresa, finalidade=valor).first() or \
+            ContaEmail(empresa=request.empresa, finalidade=valor, ativo=False)
+        dados = request.POST if request.method == "POST" and request.POST.get("finalidade") == valor else None
+        blocos.append({"valor": valor, "rotulo": rotulo, "conta": conta,
+                       "form": ContaEmailForm(dados, instance=conta, prefix=valor.lower())})
+    if request.method == "POST":
+        exigir_escrita(request.user, ["Administrador", "Financeiro"])
+        bloco = next((b for b in blocos if b["valor"] == request.POST.get("finalidade")), None)
+        if bloco is None:
+            raise PermissionDenied
+        if request.POST.get("testar"):
+            if not bloco["conta"].pk:
+                messages.error(request, "Salve a conta antes de testar.")
+            else:
+                ok, texto = testar(bloco["conta"], request.user.email)
+                (messages.success if ok else messages.error)(request, f"Teste para {request.user.email}: {texto}")
+            return redirect("core:emails")
+        if bloco["form"].is_valid():
+            conta = bloco["form"].save(commit=False)
+            conta.empresa = request.empresa
+            senha = bloco["form"].cleaned_data["nova_senha"].strip()
+            if senha:
+                conta.senha = Segredo.criar(f"SMTP · {conta.email}", senha, "INTEGRACAO", request.empresa)
+            if conta.ativo and not conta.senha_id:
+                bloco["form"].add_error("nova_senha", "Informe a senha para ativar a conta.")
+            else:
+                conta.save()
+                messages.success(request, f"Conta de {bloco['rotulo'].lower()} salva. A senha fica cifrada.")
+                return redirect("core:emails")
+    from .services.email import envio_real
+
+    return render(request, "core/emails.html", {"blocos": blocos, "real": envio_real("ALERTAS", request.empresa),
+                  "pode_salvar": request.user.tem_papel("Administrador", "Financeiro") and not request.user.somente_leitura})

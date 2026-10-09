@@ -1,0 +1,20 @@
+<div class="zap-status{% if estado.estado != 'CONECTADO' or not estado.vivo %} desconectado{% endif %}">
+  <span class="avatar-zap">{% icone "message" 28 %}</span>
+  <div style="flex:1;min-width:0">
+    <h3 style="margin:0">{% if not estado.vivo %}Worker desligado{% else %}{{ estado.get_estado_display }}{% endif %}</h3>
+    <p class="small muted" style="margin:2px 0 0">
+      {% if not config.ativo %}WhatsApp inativo na configuração.
+      {% elif not estado.vivo %}Inicie o processo <code>manage.py whatsapp_worker</code> (serviço <code>whatsapp</code> em produção).
+      {% elif estado.estado == "CONECTADO" %}{% if estado.conta %}Conta <span class="mono">+{{ estado.conta }}</span> · {% endif %}{{ config.get_transporte_display }}
+      {% elif estado.estado == "AGUARDANDO_QR" %}Abra o WhatsApp no celular → Aparelhos conectados → Conectar aparelho.
+      {% else %}{{ estado.detalhe|default:"Aguardando conexão." }}{% endif %}
+    </p>
+  </div>
+  {% if estado.vivo and estado.estado == "CONECTADO" %}<span class="badge badge-success"><span class="dot"></span>Online</span>{% elif estado.vivo %}<span class="badge badge-warning"><span class="dot"></span>{{ estado.get_estado_display }}</span>{% else %}<span class="badge badge-neutral"><span class="dot"></span>Offline</span>{% endif %}
+</div>
+{% if qr and estado.vivo %}
+<div style="margin-top:16px">
+  <div class="qr-box"><img src="{{ qr }}" alt="QR Code para conectar o WhatsApp"></div>
+  <p class="small muted" style="text-align:center;margin-top:8px">O código muda a cada poucos segundos; esta área se atualiza sozinha.</p>
+</div>
+{% endif %}

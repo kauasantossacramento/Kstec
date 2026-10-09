@@ -1,0 +1,12 @@
+<div class="item-prev{% if i.excluido %} excluido{% endif %}">
+  <span class="ponto {% if i.atrasado %}danger{% else %}{{ i.cor }}{% endif %}" title="{{ i.rotulo_origem }}"></span>
+  <div style="min-width:0">
+    <a class="titulo" href="{{ i.link }}">{{ i.titulo }}</a>
+    <div class="small muted">{% if mostrar_data %}{{ i.data|date:"d/m" }} · {% endif %}{{ i.rotulo_origem }}{% if i.atrasado %} · <span style="color:var(--danger)">vencido</span>{% endif %}{% if i.cliente %} · {{ i.cliente|truncatechars:30 }}{% endif %}</div>
+    {% if i.ajuste %}<div class="small"><span class="badge badge-neutral">ajustado</span> {% for o in i.original %}<span class="riscado">{{ o.0|date:"d/m" }} {{ o.1|brl }}</span> {% endfor %}{% if i.excluido %}· desconsiderado{% endif %}</div>{% endif %}
+  </div>
+  <div style="text-align:right">
+    <div class="valor">{{ i.valor|brl }}</div>
+    {% if i.ajustavel and pode_ajustar %}{% with m=i.ajuste.mes|default:i.data %}<a class="small" href="{% url 'faturamento:ajustar_previsao' i.contrato.pk m|date:'Y-m' %}">{% if i.ajuste %}editar ajuste{% else %}ajustar{% endif %}</a>{% endwith %}{% endif %}
+  </div>
+</div>

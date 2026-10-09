@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+{% block titulo %}WhatsApp{% endblock %}
+{% block breadcrumb %}{% icone "chevron-right" 14 %}<span class="atual">WhatsApp</span>{% endblock %}
+{% block h1 %}WhatsApp{% endblock %}
+{% block subtitulo %}<p class="sub">Alertas para você, notas e cobranças para clientes autorizados, com ritmo seguro contra bloqueios.</p>{% endblock %}
+{% block acoes %}
+<a class="btn" href="{% url 'whatsapp:contato_lista' %}">{% icone "users" 16 %} Contatos</a>
+<a class="btn" href="{% url 'whatsapp:mensagem_lista' %}">{% icone "message" 16 %} Mensagens</a>
+<a class="btn" href="{% url 'whatsapp:configuracao' %}">{% icone "settings" 16 %} Configurar</a>
+{% endblock %}
+{% block conteudo %}
+<div class="grid g-2-1">
+  <div class="stack">
+    <section class="card" hx-get="{% url 'whatsapp:status' %}" hx-trigger="every 4s" hx-swap="innerHTML">
+      {% include "mensageria/_status.html" %}
+    </section>
+
+    {% if lotes or confirmacoes %}
+    <section>
+      <div class="card-cab"><h2>Aguardando sua confirmação</h2></div>
+      {% for lote in lotes %}
+      <div class="pendencia warning">
+        <span class="ico-bolha" style="width:40px;height:40px;border-radius:12px;display:grid;place-items:center;background:var(--warning-bg);color:var(--warning)">{% icone "send" 18 %}</span>
+        <div class="txt"><strong>{{ lote.titulo }}</strong>
+          <span class="small muted">{{ lote.resumo|linebreaksbr }}</span>
+          <span class="small">{% for m in lote.mensagens.all %}{% if m.nome_arquivo %}<span class="anexo-pill">{% icone "file-text" 12 %}{{ m.nome_arquivo }}</span>{% endif %}{% endfor %}</span>
+          {% if lote.codigo %}<span class="xs muted">Código no WhatsApp: <span class="mono">{{ lote.codigo }}</span> · expira {{ lote.expira_em|date:"d/m H:i" }}</span>{% endif %}
+        </div>
+        {% if pode_escrever %}<div class="acoes-inline">
+          <form method="post" action="{% url 'whatsapp:lote_acao' lote.pk 'liberar' %}">{% csrf_token %}<button class="btn btn-primario btn-sm" type="submit">{% icone "send" 14 %} Enviar</button></form>
+          <form method="post" action="{% url 'whatsapp:lote_acao' lote.pk 'cancelar' %}" data-confirmar="Nenhuma mensagem deste lote será enviada." data-confirmar-titulo="Cancelar envio?" data-confirmar-botao="Cancelar envio">{% csrf_token %}<button class="btn btn-sm btn-fantasma" type="submit">Cancelar</button></form>
+        </div>{% endif %}
+      </div>
+      {% endfor %}
+      {% for c in confirmacoes %}
+      <div class="pendencia info"><div class="txt"><strong>{{ c.descricao }}</strong><span class="small muted">Responda SIM {{ c.codigo }} no WhatsApp ou confirme na tela de faturamento.</span></div>
+        <a class="btn btn-sm" href="{% url 'faturamento:ciclo' c.objeto_id %}">Abrir {% icone "chevron-right" 14 %}</a></div>
+      {% endfor %}
+    </section>
+    {% endif %}
+
+    <section class="card">
+      <div class="card-cab"><h3>Atividade recente</h3><a class="small" href="{% url 'whatsapp:mensagem_lista' %}">Ver todas</a></div>
+      <div class="conversa">
+        {% for m in recentes %}
+        <div{% if m.direcao == "SAIDA" %} style="align-self:flex-end;text-align:right"{% endif %}>
+          <div class="bolha{% if m.direcao == 'SAIDA' %} saida{% endif %}">{% if m.nome_arquivo %}<span class="anexo-pill">{% icone "file-text" 12 %}{{ m.nome_arquivo }}</span>{% endif %}{{ m.texto|truncatechars:260 }}</div>
+          <div class="meta">{% if m.para_admin %}você{% elif m.contato %}{{ m.contato.nome }}{% else %}{{ m.telefone_formatado }}{% endif %} · {{ m.criado_em|date:"d/m H:i" }} · <a href="{% url 'whatsapp:mensagem_detalhe' m.pk %}">{{ m.get_status_display|lower }}</a></div>
+        </div>
+        {% empty %}{% empty_state "Nenhuma mensagem ainda. Envie um teste para o seu número." %}{% endfor %}
+      </div>
+    </section>
+  </div>
+
+  <aside class="stack">
+    <section class="card">
+      <h3>{% icone "shield" 16 %} Ritmo seguro</h3>
+      <div class="medidor" style="margin-top:10px">
+        <div class="linha"><span>Clientes hoje</span><span class="mono">{{ hoje }} / {{ config.limite_dia }}</span></div>
+        <div class="progresso{% if hoje >= config.limite_dia %} bad{% endif %}"><span style="width:{% widthratio hoje config.limite_dia 100 %}%"></span></div>
+      </div>
+      <div class="medidor" style="margin-top:12px">
+        <div class="linha"><span>Última hora</span><span class="mono">{{ hora }} / {{ config.limite_hora }}</span></div>
+        <div class="progresso{% if hora >= config.limite_hora %} bad{% endif %}"><span style="width:{% widthratio hora config.limite_hora 100 %}%"></span></div>
+      </div>
+      <dl class="defs" style="grid-template-columns:1fr 1fr;margin-top:14px">
+        <div><dt>Na fila</dt><dd class="mono">{{ na_fila }}</dd></div>
+        <div><dt>Falhas 7 dias</dt><dd class="mono">{{ falhas }}</dd></div>
+        <div><dt>Janela</dt><dd>{{ config.horario_inicio|time:"H:i" }}–{{ config.horario_fim|time:"H:i" }}{% if config.dias_uteis %} · úteis{% endif %}</dd></div>
+        <div><dt>Agora</dt><dd>{% if na_janela %}<span class="badge badge-success">dentro</span>{% else %}<span class="badge badge-neutral">fora</span>{% endif %}</dd></div>
+      </dl>
+      {% if not na_janela %}<p class="xs muted" style="margin-top:6px">Próxima janela: {{ proxima_janela|date:"D d/m H:i" }}. Mensagens para você não esperam a janela.</p>{% endif %}
+      {% if estado.pausado_ate %}<div class="alerta warning" style="margin:12px 0 0">{% icone "pause" 16 %}<div class="small">Envios a clientes pausados até {{ estado.pausado_ate|date:"d/m H:i" }} — {{ estado.motivo_pausa }}.</div></div>{% endif %}
+    </section>
+    <section class="card">
+      <h3>{% icone "users" 16 %} Destinatários</h3>
+      <p class="small" style="margin:8px 0">{{ contatos_aptos }} contato(s) com consentimento · {{ config.admins|length }} número(s) de administrador.</p>
+      <p class="xs muted">O consentimento é registrado em cada contato (LGPD). Quem responde SAIR deixa de receber automaticamente.</p>
+    </section>
+    {% if pode_escrever %}
+    <section class="card stack">
+      <h3>{% icone "zap" 16 %} Ações</h3>
+      <form method="post" action="{% url 'whatsapp:reconectar' %}">{% csrf_token %}<button class="btn" style="width:100%" type="submit">{% icone "qr" 16 %} Gerar novo QR Code / reconectar</button></form>
+      <form method="post" action="{% url 'whatsapp:teste' %}">{% csrf_token %}<button class="btn" style="width:100%" type="submit">{% icone "send" 16 %} Enviar teste para meus números</button></form>
+      <form method="post" action="{% url 'whatsapp:rotinas' %}">{% csrf_token %}<button class="btn btn-fantasma" style="width:100%" type="submit">{% icone "refresh" 16 %} Rodar lembretes e rotinas agora</button></form>
+    </section>
+    {% endif %}
+    <section class="card">
+      <h3>Comandos</h3>
+      <p class="small muted">Do seu número, envie: <code>ajuda</code>, <code>status</code>, <code>financeiro</code>, <code>previsao</code>, <code>vencidos</code>, <code>faturamento</code>, <code>notas</code>, <code>nota 123</code>, <code>relatorio</code>, <code>pausar</code>, <code>retomar</code>, <code>sim 1234</code>.</p>
+    </section>
+  </aside>
+</div>
+{% endblock %}

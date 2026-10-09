@@ -226,3 +226,37 @@ class Competencia(ModeloBase):
     def save(self, *args, **kwargs):
         self.ano_mes = primeiro_dia(self.ano_mes)
         super().save(*args, **kwargs)
+
+
+class DocumentoContrato(ModeloBase):
+    """Documento enviado (assinado ou externo) de uma competência: relatório, planilha, SLA, nota etc."""
+
+    class Tipo(models.TextChoices):
+        RELATORIO_ATIVIDADES = "RELATORIO_ATIVIDADES", "Relatório de atividades"
+        PLANILHA_CUSTOS = "PLANILHA_CUSTOS", "Planilha de custos"
+        RELATORIO_SLA = "RELATORIO_SLA", "Relatório de SLA"
+        NOTA_FISCAL = "NOTA_FISCAL", "Nota fiscal"
+        CONTRATO = "CONTRATO", "Contrato, extrato ou aditivo"
+        OFICIO = "OFICIO", "Ofício, justificativa ou atesto"
+        OUTRO = "OUTRO", "Outro"
+
+    contrato = models.ForeignKey(Contrato, on_delete=models.CASCADE, related_name="documentos")
+    tipo = models.CharField(max_length=22, choices=Tipo.choices)
+    competencia = models.DateField("competência", null=True, blank=True)
+    titulo = models.CharField("título", max_length=200)
+    assinado = models.BooleanField(default=False)
+    anexo = models.ForeignKey("core.Anexo", on_delete=models.PROTECT, related_name="+")
+    observacao = models.CharField("observação", max_length=300, blank=True)
+
+    class Meta:
+        verbose_name = "documento do contrato"
+        verbose_name_plural = "documentos do contrato"
+        ordering = ["-competencia", "tipo", "-criado_em"]
+
+    def __str__(self):
+        return self.titulo
+
+    def save(self, *args, **kwargs):
+        if self.competencia:
+            self.competencia = self.competencia.replace(day=1)
+        super().save(*args, **kwargs)

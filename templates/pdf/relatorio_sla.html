@@ -1,0 +1,17 @@
+{% extends "pdf/_base.html" %}{% block titulo_cab %}Relatório de SLA · disponibilidade{% endblock %}{% block sub_cab %}{{ relatorio.competencia|date:"m/Y" }} · versão {{ relatorio.versao }}{% endblock %}
+{% block conteudo %}
+<h1>Níveis de serviço do período</h1>
+<div class="caixa"><strong>Contrato:</strong> {{ relatorio.contrato.numero }}<br><strong>Cliente:</strong> {{ relatorio.contrato.cliente }}<br><strong>Objeto:</strong> {{ relatorio.contrato.objeto|truncatechars:400 }}<br><strong>Disponibilidade média:</strong> {% if dados.uptime_geral is not None %}{{ dados.uptime_geral|floatformat:3 }}%{% else %}sem medições no período{% endif %}</div>
+<h2>Disponibilidade por sistema</h2>
+<table>
+  <thead><tr><th>Sistema</th><th>Verificações</th><th>Falhas</th><th>Disponibilidade</th><th>Meta</th><th>Resultado</th><th>Resposta média</th><th>Indisponível</th></tr></thead>
+  <tbody>{% for s in dados.sistemas %}<tr><td><strong>{{ s.nome }}</strong><br><small>{{ s.url }}</small></td><td>{{ s.verificacoes }}</td><td>{{ s.falhas }}</td><td>{% if s.uptime is not None %}{{ s.uptime|floatformat:3 }}%{% else %}—{% endif %}</td><td>{{ s.meta }}%</td><td>{% if s.uptime is None %}sem dados{% elif s.atingiu %}Atingida{% else %}Não atingida{% endif %}</td><td>{% if s.tempo_medio_ms %}{{ s.tempo_medio_ms }} ms{% else %}—{% endif %}</td><td>{{ s.indisponivel_min }} min</td></tr>{% endfor %}</tbody>
+</table>
+<h2>Incidentes</h2>
+{% for s in dados.sistemas %}{% if s.incidentes %}<p><strong>{{ s.nome }}</strong></p><ul>{% for i in s.incidentes %}<li>{{ i.inicio }} → {{ i.fim }} ({{ i.minutos }} min){% if i.causa %} · {{ i.causa }}{% endif %}</li>{% endfor %}</ul>{% endif %}{% empty %}<p>Nenhum sistema vinculado.</p>{% endfor %}
+{% if not dados.sistemas or dados.sem_dados %}<p>Sem incidentes registrados no período.</p>{% endif %}
+<h2>Metodologia</h2>
+<p>Verificação automática HTTP a intervalos regulares pelo monitoramento da KS TEC. Disponibilidade = verificações bem-sucedidas ÷ verificações realizadas no mês. Incidente = falhas consecutivas acima do limite configurado, encerrado na primeira verificação bem-sucedida.</p>
+{% if relatorio.observacoes %}<h2>Observações</h2>{{ relatorio.observacoes|linebreaks }}{% endif %}
+<div class="assinatura">Revisado e aprovado no sistema por {{ relatorio.aprovado_por }} em {{ relatorio.aprovado_em|date:"d/m/Y H:i" }}.<br>{{ empresa.razao_social }} · {{ empresa.cnpj_formatado }}</div>
+{% endblock %}

@@ -8,7 +8,7 @@ export KS_IMAGE="ghcr.io/kauasantossacramento/kscentral:${TAG}"
 COMPOSE="docker compose -f docker/compose.yml --env-file .env"
 
 ./scripts/backup.sh
-$COMPOSE pull web worker beat
+$COMPOSE pull web worker beat whatsapp
 $COMPOSE up -d --no-build
 $COMPOSE exec -T web python manage.py check --deploy --fail-level ERROR
 echo "Deploy de $KS_IMAGE concluído."

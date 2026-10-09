@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block titulo %}{{ obj.nome }}{% endblock %}
+{% block breadcrumb %}{% icone "chevron-right" 14 %}<a href="{% url 'sla:home' %}">Monitoramento</a>{% icone "chevron-right" 14 %}<span class="atual">{{ obj.nome }}</span>{% endblock %}
+{% block h1 %}<span style="display:inline-flex;align-items:center;gap:10px"><i class="pulso {{ obj.status }}" aria-hidden="true"></i>{{ obj.nome }}</span>{% endblock %}
+{% block subtitulo %}<p class="sub"><a href="{{ obj.url }}" target="_blank" rel="noopener">{{ obj.url }}</a> · {% badge_obj obj %}</p>{% endblock %}
+{% block acoes %}
+{% if pode_escrever %}
+<form method="post" action="{% url 'sla:verificar' obj.pk %}">{% csrf_token %}<input type="hidden" name="_proximo" value="{{ request.path }}"><button class="btn" type="submit">{% icone "refresh" 16 %} Verificar agora</button></form>
+<a class="btn" href="{{ url_editar }}">{% icone "edit" 16 %} Editar</a>
+{% endif %}
+{% endblock %}
+{% block conteudo %}
+<div class="grid g-4" style="margin-bottom:16px">
+  {% kpi_card "Uptime 30 dias" uptime30 formato="txt" icone_nome="activity" %}
+  {% kpi_card "Uptime 7 dias" uptime7 formato="txt" icone_nome="activity" %}
+  {% kpi_card "Resposta média 24h" medio formato="txt" icone_nome="clock" %}
+  {% kpi_card "Certificado SSL até" ssl formato="txt" icone_nome="lock" %}
+</div>
+<section class="card" style="margin-bottom:16px">
+  <div class="card-cab"><h3>Disponibilidade · 60 dias</h3><span class="small muted">verificado a cada {{ obj.intervalo_min }} min</span></div>
+  {% uptime_bar barras %}
+</section>
+<div class="grid g-2">
+  <section class="card">
+    <h3>Incidentes</h3>
+    {% for i in incidentes %}
+    <div class="item-prev"><span class="ponto {% if i.status == 'ABERTO' %}danger{% else %}success{% endif %}"></span>
+      <div><strong>{{ i.inicio|date:"d/m/Y H:i" }}</strong><div class="small muted">{{ i.causa|default:"—" }}</div></div>
+      <span class="small mono">{% if i.status == "ABERTO" %}em andamento{% else %}{{ i.duracao|duracao_curta }}{% endif %}</span></div>
+    {% empty %}<p class="muted small">Nenhum incidente.</p>{% endfor %}
+  </section>
+  <section class="card">
+    <h3>Últimas verificações</h3>
+    <div class="tabela-wrap" style="border:0"><table class="tabela">
+      <thead><tr><th>Quando</th><th>HTTP</th><th class="num">ms</th><th>Resultado</th></tr></thead>
+      <tbody>{% for v in verificacoes %}<tr><td class="small">{{ v.em|date:"d/m H:i:s" }}</td><td class="mono">{{ v.http_status|default:"—" }}</td><td class="num mono">{{ v.tempo_ms|default:"—" }}</td><td>{% if v.sucesso %}<span class="badge badge-success">ok</span>{% else %}<span class="badge badge-danger" title="{{ v.erro }}">{{ v.erro|truncatechars:28 }}</span>{% endif %}</td></tr>{% empty %}<tr><td colspan="4" class="muted small">Ainda não verificado.</td></tr>{% endfor %}</tbody>
+    </table></div>
+  </section>
+</div>
+{% endblock %}

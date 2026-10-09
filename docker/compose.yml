@@ -40,6 +40,18 @@ services:
     <<: *app
     command: ["celery", "-A", "config", "beat", "-l", "info"]
 
+  # WhatsApp (neonize): processo único por número; consome a fila no ritmo seguro e recebe comandos.
+  # A sessão do aparelho fica no volume "whatsapp" — não apague, ou será preciso ler o QR Code de novo.
+  whatsapp:
+    <<: *app
+    command: ["python", "manage.py", "whatsapp_worker"]
+    environment:
+      WHATSAPP_SESSAO: /app/data/whatsapp/sessao.sqlite3
+    volumes:
+      - media:/app/media
+      - whatsapp:/app/data
+    stop_grace_period: 30s
+
   db:
     image: postgres:16-alpine
     restart: unless-stopped
@@ -90,5 +102,6 @@ volumes:
   pgdata:
   redisdata:
   media:
+  whatsapp:
   caddy_data:
   caddy_config:

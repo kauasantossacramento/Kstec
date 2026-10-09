@@ -1,0 +1,17 @@
+<section class="card sistema-card">
+  <div class="topo">
+    <div style="min-width:0">
+      <h3 style="margin:0;display:flex;gap:8px;align-items:center"><i class="pulso {{ s.status }}" aria-hidden="true"></i><a href="{% url 'sla:sistema_detalhe' s.pk %}" style="color:inherit">{{ s.nome }}</a></h3>
+      <div class="url">{{ s.url }}</div>
+    </div>
+    {% badge_obj s %}
+  </div>
+  <div class="metricas">
+    <div><strong>{% if s.uptime_30d is not None %}{{ s.uptime_30d|floatformat:2 }}%{% else %}—{% endif %}</strong><span>uptime 30d</span></div>
+    <div><strong>{{ s.ultimo_tempo_ms|default:"—" }}{% if s.ultimo_tempo_ms %}<small class="muted"> ms</small>{% endif %}</strong><span>resposta</span></div>
+    <div><strong>{% if s.ultima_verificacao %}{{ s.ultima_verificacao|date:"H:i" }}{% else %}—{% endif %}</strong><span>verificado</span></div>
+  </div>
+  {% uptime_bar s.barras %}
+  {% if s.status == "FORA" and s.ultimo_erro %}<p class="small" style="color:var(--danger);margin:0">{{ s.ultimo_erro }}</p>{% endif %}
+  {% if s.contrato %}<p class="xs muted" style="margin:0">Contrato {{ s.contrato.numero }}</p>{% endif %}
+</section>

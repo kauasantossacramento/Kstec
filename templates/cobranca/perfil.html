@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+{% block titulo %}Comunicação · {{ pessoa }}{% endblock %}
+{% block breadcrumb %}{% icone "chevron-right" 14 %}<a href="{% url 'cadastros:pessoa_lista' %}">Clientes</a>{% icone "chevron-right" 14 %}<a href="{% url 'cadastros:pessoa_detalhe' pessoa.pk %}">{{ pessoa }}</a>{% icone "chevron-right" 14 %}<span class="atual">Comunicação e cobrança</span>{% endblock %}
+{% block h1 %}Comunicação e cobrança{% endblock %}
+{% block subtitulo %}<p class="sub">{{ pessoa }} · {{ pessoa.doc_formatado }}</p>{% endblock %}
+{% block conteudo %}
+<div class="grid g-2-1">
+  <div class="stack">
+    <form method="post" class="card" novalidate>{% csrf_token %}
+      {% if form.non_field_errors %}<div class="alerta danger">{% icone "alert" 18 %}<div>{% for e in form.non_field_errors %}{{ e }}{% endfor %}</div></div>{% endif %}
+      <div class="config-secao">
+        <div class="lado"><h3>{% icone "message" 16 %} WhatsApp</h3><p>Chave geral do cliente. Só contatos com consentimento recebem.</p></div>
+        <div class="form-grid">
+          {% include "components/campo.html" with campo=form.whatsapp_ativo largo=True %}
+          {% include "components/campo.html" with campo=form.enviar_nota largo=True %}
+          {% include "components/campo.html" with campo=form.confirmacao largo=True %}
+        </div>
+      </div>
+      <div class="config-secao">
+        <div class="lado"><h3>{% icone "bell" 16 %} Lembretes</h3><p>Dias relativos ao vencimento de cada cobrança em aberto.</p></div>
+        <div class="form-grid">
+          {% include "components/campo.html" with campo=form.enviar_lembretes largo=True %}
+          {% include "components/campo.html" with campo=form.dias_antes %}
+          {% include "components/campo.html" with campo=form.dias_depois %}
+        </div>
+      </div>
+      <div class="config-secao">
+        <div class="lado"><h3>{% icone "credit-card" 16 %} Pagamento</h3><p>Link e PIX do Asaas nas mensagens.</p></div>
+        <div class="form-grid">
+          {% include "components/campo.html" with campo=form.link_pagamento largo=True %}
+          {% include "components/campo.html" with campo=form.forma largo=True %}
+        </div>
+      </div>
+      {% if pode_escrever %}<div class="form-acoes"><button class="btn btn-primario" type="submit">{% icone "check" 16 %} Salvar preferências</button></div>{% endif %}
+    </form>
+    {% if cobrancas %}
+    <section class="card">
+      <h3>Cobranças recentes</h3>
+      {% for c in cobrancas %}<div class="linha entre" style="padding:8px 0;border-bottom:1px solid var(--line)"><a href="{% url 'cobranca:cobranca_detalhe' c.pk %}">{{ c.lancamento.descricao|truncatechars:50 }}</a><span>{% badge_obj c %} <span class="mono small">{{ c.valor|brl }}</span></span></div>{% endfor %}
+    </section>
+    {% endif %}
+  </div>
+  <aside class="stack">
+    <section class="card">
+      <div class="card-cab"><h3>{% icone "smartphone" 16 %} Contatos de WhatsApp</h3></div>
+      {% for c in contatos %}
+      <div class="item-prev">
+        <span class="ponto {% if c.apto %}success{% elif c.descadastrado_em %}danger{% else %}neutral{% endif %}"></span>
+        <div style="min-width:0"><a class="titulo" href="{% url 'whatsapp:contato_detalhe' c.pk %}">{{ c.nome }}</a>
+          <div class="small muted mono">{{ c.telefone_formatado }}</div>
+          <div class="xs muted">{% if c.descadastrado_em %}Pediu para sair em {{ c.descadastrado_em|data_br }}{% elif not c.consentimento %}Sem consentimento — não recebe{% elif c.verificado is False %}Número sem WhatsApp{% else %}{% if c.recebe_notas %}notas{% endif %}{% if c.recebe_notas and c.recebe_cobrancas %} · {% endif %}{% if c.recebe_cobrancas %}cobranças{% endif %}{% endif %}</div>
+        </div>
+        <span></span>
+      </div>
+      {% empty %}<p class="muted small">Nenhum contato. Adicione abaixo quem deve receber notas e cobranças.</p>{% endfor %}
+    </section>
+    {% if pode_escrever %}
+    <form method="post" action="{% url 'whatsapp:contato_rapido' pessoa.pk %}" class="card stack" novalidate>{% csrf_token %}
+      <h3>{% icone "plus" 16 %} Novo contato</h3>
+      {% include "components/campo.html" with campo=contato_form.nome %}
+      {% include "components/campo.html" with campo=contato_form.telefone %}
+      {% include "components/campo.html" with campo=contato_form.consentimento %}
+      {% include "components/campo.html" with campo=contato_form.origem_consentimento %}
+      {% include "components/campo.html" with campo=contato_form.recebe_notas %}
+      {% include "components/campo.html" with campo=contato_form.recebe_cobrancas %}
+      <input type="hidden" name="contato-ativo" value="on">
+      <button class="btn btn-primario" type="submit">{% icone "check" 16 %} Adicionar contato</button>
+    </form>
+    {% endif %}
+  </aside>
+</div>
+{% endblock %}

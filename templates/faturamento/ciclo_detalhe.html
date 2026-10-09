@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+{% block titulo %}{{ obj }}{% endblock %}
+{% block breadcrumb %}{% icone "chevron-right" 14 %}<a href="{% url 'faturamento:home' %}">Faturamento</a>{% icone "chevron-right" 14 %}<a href="{% url 'faturamento:agenda' obj.agenda_id %}">{{ obj.agenda.contrato.numero }}</a>{% icone "chevron-right" 14 %}<span class="atual">{{ obj.competencia|date:"m/Y" }}</span>{% endblock %}
+{% block h1 %}Competência {{ obj.competencia|date:"m/Y" }}{% endblock %}
+{% block subtitulo %}<p class="sub">{{ obj.agenda.contrato.cliente }} · contrato {{ obj.agenda.contrato.numero }} · {% badge_obj obj %}</p>{% endblock %}
+{% block acoes %}{% if obj.nota %}<a class="btn" href="{% url 'fiscal:nota_detalhe' obj.nota.pk %}">{% icone "receipt" 16 %} Abrir nota</a>{% endif %}{% endblock %}
+{% block conteudo %}
+{% if obj.mensagem %}<div class="alerta {% if obj.status == 'BLOQUEADO' or obj.status == 'FALHA' %}danger{% elif obj.status == 'AGUARDANDO' %}warning{% elif obj.status == 'AUTORIZADO' %}success{% endif %}">{% icone "info" 18 %}<div>{{ obj.mensagem }}</div></div>{% endif %}
+<div class="grid g-2-1">
+  <div class="stack">
+    <div class="grid g-3">
+      {% kpi_card "Valor" obj.valor icone_nome="receipt" %}
+      {% kpi_card "Emissão" obj.data_emissao|data_br formato="txt" icone_nome="calendar" %}
+      {% kpi_card "Vencimento" obj.data_vencimento|data_br formato="txt" icone_nome="clock" %}
+    </div>
+    <section class="card">
+      <div class="card-cab"><h3>Discriminação</h3>{% if obj.discriminacao %}<span class="badge badge-neutral">texto só deste mês</span>{% endif %}</div>
+      <div class="texto-previa">{{ texto }}</div>
+    </section>
+    {% if form and pode_escrever %}
+    <details class="card">
+      <summary style="cursor:pointer;font-weight:700">{% icone "edit" 16 %} Ajustar somente esta competência</summary>
+      <p class="small muted" style="margin-top:8px">Muda valor, datas ou texto apenas deste mês. A agenda e os demais meses não são alterados.</p>
+      <form method="post" action="{% url 'faturamento:ciclo_acao' obj.pk 'ajustar' %}" novalidate>{% csrf_token %}
+        {% include "components/form_campos.html" %}
+        <div class="form-acoes"><button class="btn btn-primario" type="submit">{% icone "check" 16 %} Aplicar ajuste</button></div>
+      </form>
+    </details>
+    {% endif %}
+    <section class="card">
+      <h3>Linha do tempo</h3>
+      {% if eventos %}<ul class="timeline">{% for e in eventos %}<li><div class="quando">{{ e.em|date:"d/m/Y H:i" }} {% if e.usuario %}· {{ e.usuario }}{% else %}· automação{% endif %}</div><div><strong>{{ e.tipo|capfirst }}</strong> — {{ e.texto }}</div></li>{% endfor %}</ul>{% else %}<p class="muted small">Sem eventos.</p>{% endif %}
+    </section>
+  </div>
+  <aside class="stack">
+    <section class="card">
+      <h3>Ações</h3>
+      <div class="stack" style="margin-top:10px">
+      {% if obj.status == "AGUARDANDO" and pode_transmitir %}
+        <form method="post" action="{% url 'faturamento:ciclo_acao' obj.pk 'confirmar' %}" data-confirmar="A NFS-e de {{ obj.valor|brl }} será transmitida agora ao emissor e não poderá ser desfeita por aqui." data-confirmar-titulo="Transmitir NFS-e?" data-confirmar-botao="Transmitir" data-confirmar-perigo="0">{% csrf_token %}<button class="btn btn-primario" style="width:100%" type="submit">{% icone "send" 16 %} Confirmar e transmitir</button></form>
+      {% endif %}
+      {% if obj.status == "PROGRAMADO" or obj.status == "BLOQUEADO" or obj.status == "FALHA" and not obj.nota or obj.status == "FALHA" and obj.nota.status != "REJEITADA" %}{% if pode_transmitir %}
+        <form method="post" action="{% url 'faturamento:ciclo_acao' obj.pk 'executar' %}" data-confirmar="{% if obj.agenda.modo == 'RASCUNHO' %}Prepara o rascunho da nota agora.{% else %}Gera a nota e, se todas as validações passarem, transmite agora ao emissor.{% endif %}" data-confirmar-titulo="Executar agora?" data-confirmar-botao="Executar" data-confirmar-perigo="0">{% csrf_token %}<button class="btn{% if obj.status != 'AGUARDANDO' %} btn-primario{% endif %}" style="width:100%" type="submit">{% icone "play" 16 %} {% if obj.agenda.modo == "RASCUNHO" %}Preparar rascunho agora{% else %}Emitir agora{% endif %}</button></form>
+      {% endif %}{% endif %}
+      {% if obj.status == "FALHA" and obj.nota.status == "REJEITADA" and pode_escrever %}
+        <form method="post" action="{% url 'faturamento:ciclo_acao' obj.pk 'refazer' %}" data-confirmar="A nota rejeitada continua no histórico fiscal. Uma nova nota será gerada na próxima execução." data-confirmar-titulo="Refazer nota?" data-confirmar-botao="Refazer" data-confirmar-perigo="0">{% csrf_token %}<button class="btn" style="width:100%" type="submit">{% icone "refresh" 16 %} Refazer nota</button></form>
+      {% endif %}
+      {% if obj.status == "PULADO" and pode_escrever %}
+        <form method="post" action="{% url 'faturamento:ciclo_acao' obj.pk 'retomar' %}">{% csrf_token %}<button class="btn" style="width:100%" type="submit">{% icone "refresh" 16 %} Voltar para a fila</button></form>
+      {% endif %}
+      {% if obj.status == "RASCUNHO" and obj.nota %}
+        <a class="btn btn-primario" style="width:100%" href="{% url 'fiscal:nota_detalhe' obj.nota.pk %}">{% icone "eye" 16 %} Revisar e transmitir nota</a>
+      {% endif %}
+      {% if obj.status != "AUTORIZADO" and obj.status != "TRANSMITIDO" and obj.status != "PULADO" and pode_escrever %}
+        <form method="post" action="{% url 'faturamento:ciclo_acao' obj.pk 'pular' %}" class="stack" style="margin-top:6px">{% csrf_token %}
+          <label class="small muted" for="motivo-pular">Não faturar esta competência</label>
+          <input class="input" id="motivo-pular" name="motivo" placeholder="Motivo (obrigatório)" required>
+          <button class="btn btn-fantasma" type="submit">{% icone "skip" 16 %} Pular competência</button>
+        </form>
+      {% endif %}
+      {% if obj.status == "AUTORIZADO" %}<p class="small muted">{% icone "check" 14 %} Nota autorizada. Cancelamento e substituição seguem o fluxo fiscal.</p>{% endif %}
+      {% if obj.status == "TRANSMITIDO" %}<p class="small muted">{% icone "clock" 14 %} O resultado é consultado automaticamente a cada 10 minutos. Não há reenvio.</p>{% endif %}
+      </div>
+    </section>
+    <section class="card">
+      <h3>Origem</h3>
+      {% include "faturamento/_regra.html" with a=obj.agenda %}
+      <p class="small muted" style="margin-top:10px">{{ obj.execucoes }} execução(ões){% if obj.ultima_execucao %} · última {{ obj.ultima_execucao|data_br }}{% endif %}{% if obj.confirmado_em %} · confirmado {{ obj.confirmado_em|data_br }}{% endif %}</p>
+    </section>
+  </aside>
+</div>
+{% endblock %}

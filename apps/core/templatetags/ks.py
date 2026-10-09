@@ -58,6 +58,16 @@ ICONES = {
     "trending-down": '<path d="m3 7 6 6 4-4 8 8"/><path d="M14 17h7v-7"/>',
     "server": '<rect x="3" y="3" width="18" height="8" rx="2"/><rect x="3" y="13" width="18" height="8" rx="2"/><path d="M7 7h.01M7 17h.01"/>',
     "zip": '<path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M10 3v2h2v2h-2v2h2v2h-2v3"/>',
+    "repeat": '<path d="m17 2 4 4-4 4"/><path d="M3 11V9a3 3 0 0 1 3-3h15M7 22l-4-4 4-4"/><path d="M21 13v2a3 3 0 0 1-3 3H3"/>',
+    "message": '<path d="M21 12a8.5 8.5 0 0 1-12.6 7.4L3 21l1.6-5.2A8.5 8.5 0 1 1 21 12z"/>',
+    "credit-card": '<rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20M6 15h4"/>',
+    "qr": '<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 14h3v3h-3zM20 14v.01M14 20h.01M17 20h4v-3"/>',
+    "pause": '<rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/>',
+    "play": '<path d="m7 4 13 8-13 8z"/>',
+    "skip": '<path d="m5 4 10 8-10 8zM19 5v14"/>',
+    "zap": '<path d="M13 2 3 14h9l-1 8 10-12h-9z"/>',
+    "smartphone": '<rect x="6" y="2" width="12" height="20" rx="2"/><path d="M11 18h2"/>',
+    "lock": '<rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>',
 }
 
 
@@ -232,3 +242,12 @@ def nome_campo(model_ou_obj, campo):
         return model_ou_obj._meta.get_field(campo).verbose_name
     except Exception:
         return campo.replace("_", " ")
+
+
+@register.filter
+def duracao_curta(delta):
+    """timedelta → "2 h 05 min" / "12 min"."""
+    if not delta:
+        return "—"
+    minutos = int(delta.total_seconds() // 60)
+    return f"{minutos // 60} h {minutos % 60:02d} min" if minutos >= 60 else f"{max(minutos, 1)} min"

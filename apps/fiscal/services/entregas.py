@@ -6,7 +6,6 @@ import re
 import smtplib
 import zipfile
 
-from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.core.mail import EmailMessage
 from django.core.validators import validate_email
@@ -57,6 +56,11 @@ def certidoes_validas(contrato):
 
 
 def documentos_contrato(nota):
+    """Documentos da competência. Cada exigência é atendida pelo documento aprovado no sistema OU por um documento
+    enviado (ex.: PDF assinado) do mesmo tipo e competência em Contrato → Documentos."""
+    from apps.contratos.models import DocumentoContrato
+    from apps.sla.services.relatorio import aprovado as sla_aprovado
+
     contrato = nota.contrato
     if contrato.empresa_id != nota.empresa_id or contrato.cliente_id != nota.tomador_id:
         raise ValidationError("Contrato e tomador precisam pertencer à mesma empresa e cliente.")
@@ -65,17 +69,45 @@ def documentos_contrato(nota):
                        competencia=competencia, status="APROVADO", ativo=True).order_by("-versao").first()
     planilha = PlanilhaCustos.objects.filter(empresa=nota.empresa, contrato=contrato,
                        competencia=competencia, status="APROVADO", ativo=True).order_by("-versao").first()
+    enviados = {}
+    for doc in DocumentoContrato.objects.filter(contrato=contrato, competencia=competencia, ativo=True).select_related("anexo"):
+        enviados.setdefault(doc.tipo, doc)
+    sla = sla_aprovado(contrato, competencia) if contrato.exige_relatorio_sla else None
     faltas = []
-    if not relatorio or not relatorio.pdf_id:
-        faltas.append("Relatório de atividades aprovado na mesma competência")
-    if not planilha or not planilha.xlsx_id or not planilha.pdf_id:
-        faltas.append("Planilha de custos aprovada na mesma competência")
-    if contrato.exige_relatorio_sla:
-        # O módulo SLA ainda não foi implementado: não envie pacote incompleto.
-        faltas.append("Relatório de SLA exigido pelo contrato (integração pendente)")
+    if not (relatorio and relatorio.pdf_id) and "RELATORIO_ATIVIDADES" not in enviados:
+        faltas.append("Relatório de atividades aprovado (ou PDF assinado enviado) na mesma competência")
+    if not (planilha and planilha.xlsx_id and planilha.pdf_id) and "PLANILHA_CUSTOS" not in enviados:
+        faltas.append("Planilha de custos aprovada (ou PDF assinado enviado) na mesma competência")
+    if contrato.exige_relatorio_sla and not (sla and sla.pdf_id) and "RELATORIO_SLA" not in enviados:
+        faltas.append("Relatório de SLA aprovado (ou PDF enviado) na mesma competência")
     if faltas:
         raise ValidationError(faltas)
-    return relatorio, planilha, certidoes_validas(contrato)
+    return {"relatorio": relatorio if relatorio and relatorio.pdf_id else None,
+            "planilha": planilha if planilha and planilha.xlsx_id and planilha.pdf_id else None,
+            "sla": sla if sla and sla.pdf_id else None, "enviados": list(enviados.values()),
+            "certidoes": certidoes_validas(contrato)}
+
+
+def arquivos_documentos(docs):
+    arquivos = []
+    if docs["relatorio"]:
+        arquivos.append((docs["relatorio"].pdf.nome, docs["relatorio"].pdf.ler()))
+    if docs["planilha"]:
+        arquivos += [(docs["planilha"].xlsx.nome, docs["planilha"].xlsx.ler()), (docs["planilha"].pdf.nome, docs["planilha"].pdf.ler())]
+    if docs["sla"]:
+        arquivos.append((docs["sla"].pdf.nome, docs["sla"].pdf.ler()))
+    for doc in docs["enviados"]:
+        if (doc.tipo == "RELATORIO_ATIVIDADES" and docs["relatorio"]) or (doc.tipo == "PLANILHA_CUSTOS" and docs["planilha"])                 or (doc.tipo == "RELATORIO_SLA" and docs["sla"]):
+            continue  # o documento aprovado no sistema prevalece
+        arquivos.append((doc.anexo.nome, doc.anexo.ler()))
+    return arquivos
+
+
+def ids_documentos(docs):
+    return {"relatorio": str(docs["relatorio"].pk) if docs["relatorio"] else None,
+            "planilha": str(docs["planilha"].pk) if docs["planilha"] else None,
+            "sla": str(docs["sla"].pk) if docs["sla"] else None,
+            "enviados": sorted(str(d.pk) for d in docs["enviados"])}
 
 
 def zip_bytes(arquivos):
@@ -90,7 +122,7 @@ def zip_bytes(arquivos):
 
 @transaction.atomic
 def preparar_entrega(nota, destinatarios, assunto, mensagem):
-    nota = NotaFiscal.objects.select_for_update().select_related("contrato", "tomador").get(pk=nota.pk)
+    nota = NotaFiscal.objects.select_for_update(of=("self",)).select_related("contrato", "tomador").get(pk=nota.pk)
     if nota.status != "AUTORIZADA" or nota.ambiente != 1:
         raise ValidationError("Envie apenas NFS-e autorizada em produção.")
     destinos = emails(destinatarios)
@@ -105,9 +137,8 @@ def preparar_entrega(nota, destinatarios, assunto, mensagem):
     manifesto = {"nota": str(nota.pk), "contrato": str(nota.contrato_id) if nota.contrato_id else None,
                  "competencia": str(nota.competencia.replace(day=1)), "certidoes": []}
     if documentos:
-        relatorio, planilha, certs = documentos
-        arquivos.extend([(relatorio.pdf.nome, relatorio.pdf.ler()), (planilha.xlsx.nome, planilha.xlsx.ler()),
-                         (planilha.pdf.nome, planilha.pdf.ler())])
+        certs = documentos["certidoes"]
+        arquivos.extend(arquivos_documentos(documentos))
         cert_arquivos = []
         for indice, cert in enumerate(certs, 1):
             with cert.arquivo.open("rb") as f:
@@ -120,7 +151,7 @@ def preparar_entrega(nota, destinatarios, assunto, mensagem):
                                           "validade": str(cert.data_validade), "sha256": hashlib.sha256(dados).hexdigest()})
         indice_cert = renderizar_pdf("pdf/certidoes_entrega.html", {"nota": nota, "certidoes": certs, "empresa": nota.empresa})
         arquivos.append(("kit_certidoes.zip", zip_bytes([("00_indice.pdf", indice_cert), *cert_arquivos])))
-        manifesto.update({"relatorio": str(relatorio.pk), "planilha": str(planilha.pk)})
+        manifesto.update(ids_documentos(documentos))
     manifesto["arquivos"] = [{"nome": n, "tamanho": len(c), "sha256": hashlib.sha256(c).hexdigest()} for n, c in arquivos]
     if documentos:
         arquivos.insert(0, ("00_indice.pdf", renderizar_pdf("pdf/pacote_entrega.html", {"nota": nota,
@@ -138,8 +169,8 @@ def revalidar_entrega(entrega):
     if entrega.manifesto.get("contrato") != (str(nota.contrato_id) if nota.contrato_id else None):
         raise ValidationError("O vínculo contratual mudou após preparar o pacote.")
     if nota.contrato_id:
-        atual_rel, atual_plan, _ = documentos_contrato(nota)
-        if str(atual_rel.pk) != entrega.manifesto["relatorio"] or str(atual_plan.pk) != entrega.manifesto["planilha"]:
+        atuais = ids_documentos(documentos_contrato(nota))
+        if any(atuais[k] != entrega.manifesto.get(k) for k in atuais):
             raise ValidationError("Há nova versão aprovada dos documentos. Prepare um novo pacote.")
         exigidas = {str(pk) for pk in nota.contrato.certidoes_exigidas.values_list("pk", flat=True)}
         incluidas = {item["tipo"] for item in entrega.manifesto["certidoes"]}
@@ -158,7 +189,7 @@ def revalidar_entrega(entrega):
 
 def enviar_entrega(entrega):
     with transaction.atomic():
-        atual = EntregaNota.objects.select_for_update().select_related("nota__contrato", "pacote").get(pk=entrega.pk)
+        atual = EntregaNota.objects.select_for_update(of=("self",)).select_related("nota__contrato", "pacote").get(pk=entrega.pk)
         if atual.status != "PREPARADA":
             raise ValidationError("Este envio já foi iniciado. Confira o histórico antes de preparar outro.")
         revalidar_entrega(atual)
@@ -167,7 +198,10 @@ def enviar_entrega(entrega):
             raise ValidationError("O pacote arquivado foi alterado.")
         atual.status = "ENVIANDO"
         atual.save()
-    mail = EmailMessage(atual.assunto, atual.mensagem, settings.DEFAULT_FROM_EMAIL, atual.destinatarios)
+    from apps.core.services.email import conexao
+
+    conexao_smtp, remetente, copia = conexao("DOCUMENTOS", atual.empresa)
+    mail = EmailMessage(atual.assunto, atual.mensagem, remetente, atual.destinatarios, bcc=copia, connection=conexao_smtp)
     if atual.nota.contrato_id:
         mail.attach(atual.pacote.nome, dados, "application/zip")
     else:
@@ -183,8 +217,7 @@ def enviar_entrega(entrega):
         atual.status = "INCERTA"
         atual.save()
         raise ValidationError("Envio sem confirmação. Confira o servidor de e-mail antes de preparar outro envio.") from None
-    simulacao = settings.EMAIL_BACKEND in ["django.core.mail.backends." + nome + ".EmailBackend"
-                                           for nome in ("console", "filebased", "locmem", "dummy")]
+    simulacao = type(conexao_smtp).__module__.rsplit(".", 1)[-1] in ("console", "filebased", "locmem", "dummy")
     atual.status = "SIMULADA" if simulacao else "ENVIADA"
     atual.enviado_em = timezone.now()
     atual.save()

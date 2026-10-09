@@ -31,6 +31,8 @@ def validar_emissao(nota, config):
             raise ValidationError("Todos os vínculos devem pertencer à mesma empresa.")
     if not nota.item_catalogo.ativo or not nota.perfil.ativo:
         raise ValidationError("Selecione um item e um perfil ativos.")
+    if not nota.tomador.cpf_cnpj:
+        raise ValidationError("O tomador não tem CPF/CNPJ cadastrado. Informe o documento antes de emitir.")
     if any(nota.tomador_snapshot.get(campo) != getattr(nota.tomador, campo)
            for campo in ("cpf_cnpj", "razao_social")):
         raise ValidationError("O tomador mudou. Edite, confira e salve o rascunho antes de transmitir.")
@@ -40,8 +42,17 @@ def validar_emissao(nota, config):
     if nota.empresa.regime_tributario != "SIMPLES" or not nota.empresa.optante_simples:
         raise ValidationError("O adaptador atual transmite ME/EPP optante do Simples.")
     if any(getattr(nota, campo) for campo in ("valor_deducoes", "desconto_incondicionado", "desconto_condicionado",
-            "outras_retencoes", "valor_ir", "valor_inss", "valor_pis", "valor_cofins", "valor_csll")) or nota.iss_retido:
-        raise ValidationError("Este adaptador ainda não transmite retenções ou descontos; mantenha a nota como rascunho.")
+            "outras_retencoes", "valor_ir", "valor_inss", "valor_pis", "valor_cofins", "valor_csll")):
+        raise ValidationError("Este adaptador ainda não transmite retenções federais ou descontos; mantenha a nota como rascunho.")
+    if nota.iss_retido:
+        end = nota.tomador.endereco
+        if not nota.tomador.cpf_cnpj or end is None or end.municipio_ibge != nota.empresa.municipio_ibge:
+            raise ValidationError("ISS retido exige tomador com CNPJ e endereço no município do emitente "
+                                  "(a retenção é feita pelo tomador local).")
+        if not (end.cep and end.logradouro and end.bairro):
+            raise ValidationError("Complete o endereço do tomador (CEP, logradouro e bairro) para reter o ISS.")
+        if nota.valor_iss_retido != nota.valor_iss or not nota.valor_iss:
+            raise ValidationError("O ISS retido deve ser igual ao ISS calculado. Salve o rascunho novamente.")
     item = nota.item_catalogo
     if item.pendencias_fiscais:
         raise ValidationError(item.pendencias_fiscais)
@@ -61,9 +72,19 @@ def validar_emissao(nota, config):
             raise ValidationError("Confirme o código municipal do serviço antes de transmitir.")
 
 
+def dados_tomador(pessoa):
+    end = pessoa.endereco
+    dados = {"cpf" if pessoa.tipo == "F" else "cnpj": pessoa.cpf_cnpj, "nome": pessoa.razao_social,
+             "im": pessoa.inscricao_municipal.strip() if pessoa.inscricao_municipal else ""}
+    if end is not None:
+        dados["endereco"] = {"municipio_ibge": end.municipio_ibge, "cep": end.cep, "logradouro": end.logradouro,
+                             "numero": end.numero, "complemento": end.complemento, "bairro": end.bairro}
+    return dados
+
+
 @transaction.atomic
 def preparar_tentativa(nota, config):
-    nota = NotaFiscal.objects.select_for_update().select_related("empresa", "tomador", "item_catalogo__nbs",
+    nota = NotaFiscal.objects.select_for_update(of=("self",)).select_related("empresa", "tomador", "item_catalogo__nbs",
                 "item_catalogo__codigo_tributacao_nacional", "item_catalogo__item_lc116").get(pk=nota.pk, empresa=config.empresa)
     if nota.status != NotaFiscal.Status.RASCUNHO or nota.tentativas.exists() or nota.id_dps:
         raise ValidationError("A nota já tem uma tentativa de emissão. Consulte o resultado.")
@@ -77,11 +98,11 @@ def preparar_tentativa(nota, config):
     item = nota.item_catalogo
     ident, xml = preparar_dps_producao(a1, seq.ultimo_numero, municipio=nota.empresa.municipio_ibge,
         inscricao_municipal=nota.empresa.inscricao_municipal,
-        tomador={"cpf" if nota.tomador.tipo == "F" else "cnpj": nota.tomador.cpf_cnpj, "nome": nota.tomador.razao_social},
+        tomador=dados_tomador(nota.tomador),
         codigo_nacional=item.codigo_tributacao_nacional.codigo, nbs=item.nbs.codigo,
         codigo_municipal=item.codigo_tributacao_municipal, descricao=nota.discriminacao,
         valor=nota.valor_servicos, aliquota_iss=nota.aliquota_iss, total_tributos_simples=config.total_tributos_simples,
-        serie=str(config.serie_dps), competencia=nota.competencia, ambiente=config.ambiente)
+        serie=str(config.serie_dps), competencia=nota.competencia, ambiente=config.ambiente, iss_retido=nota.iss_retido)
     validar_assinatura_schema(xml, a1, SCHEMAS_EL, ambiente=config.ambiente)
     anexo = Anexo.criar(nota, "dps-assinada.xml", xml, retencao_anos=5)
     tentativa = TentativaTransmissao.objects.create(empresa=nota.empresa, nota=nota, canal=config.canal_padrao,
@@ -111,7 +132,7 @@ def json_resposta(resposta):
 def registrar_resultado(tentativa, status, retorno, *, consulta=False):
     if not isinstance(retorno, dict):
         retorno = {"resposta_nao_objeto": True}
-    tentativa = TentativaTransmissao.objects.select_for_update().select_related("nota__empresa").get(pk=tentativa.pk)
+    tentativa = TentativaTransmissao.objects.select_for_update(of=("self",)).select_related("nota__empresa").get(pk=tentativa.pk)
     nota = NotaFiscal.objects.select_for_update().get(pk=tentativa.nota_id)
     situacao = interpretar_retorno(status, retorno, tentativa.id_dps, tentativa.ambiente, consulta=consulta)
     if consulta:

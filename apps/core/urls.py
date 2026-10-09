@@ -21,6 +21,7 @@ urlpatterns = [
     path("_componentes/", views.componentes, name="componentes"),
     path("configuracoes/", views.configuracoes, name="configuracoes"),
     path("configuracoes/empresa/", views.empresa_editar, name="empresa"),
+    path("configuracoes/emails/", views.emails, name="emails"),
     *views.CRUD_USUARIO.urls(),
     *views.CRUD_PARAMETRO.urls(),
     *views.CRUD_LOG.urls(),

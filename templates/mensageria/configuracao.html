@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block titulo %}Configurar WhatsApp{% endblock %}
+{% block breadcrumb %}{% icone "chevron-right" 14 %}<a href="{% url 'whatsapp:home' %}">WhatsApp</a>{% icone "chevron-right" 14 %}<span class="atual">Configuração</span>{% endblock %}
+{% block h1 %}Configurar WhatsApp{% endblock %}
+{% block subtitulo %}<p class="sub">WhatsApp Web não oficial (neonize): use um número dedicado à empresa e mantenha o ritmo conservador.</p>{% endblock %}
+{% block conteudo %}
+<div class="grid g-2-1">
+  <form method="post" class="card" novalidate>{% csrf_token %}
+    {% if form.non_field_errors %}<div class="alerta danger">{% icone "alert" 18 %}<div>{% for e in form.non_field_errors %}{{ e }}<br>{% endfor %}</div></div>{% endif %}
+    {% for s in form.secoes %}
+    <div class="config-secao">
+      <div class="lado"><h3>{{ s.titulo }}</h3><p>{{ s.descricao }}</p></div>
+      <div class="form-grid">
+        {% for c in s.campos %}{% include "components/campo.html" with campo=c.bf largo=c.largo %}{% endfor %}
+      </div>
+    </div>
+    {% endfor %}
+    {% if pode_salvar %}<div class="form-acoes"><a class="btn" href="{% url 'whatsapp:home' %}">Cancelar</a><button class="btn btn-primario" type="submit">{% icone "check" 16 %} Salvar</button></div>
+    {% else %}<p class="small muted">Somente Administrador altera esta configuração.</p>{% endif %}
+  </form>
+  <aside class="stack">
+    <section class="card">
+      <h3>{% icone "shield" 16 %} Boas práticas contra bloqueio</h3>
+      <ul class="small" style="padding-left:18px;margin:8px 0 0;display:grid;gap:6px">
+        <li>Use um chip dedicado, com foto e nome da empresa, aquecido com conversas reais antes de automatizar.</li>
+        <li>Envie só a quem autorizou; peça ao cliente para salvar o número.</li>
+        <li>Mantenha os limites baixos nas primeiras semanas (ex.: 15/h, 60/dia, 10 contatos novos/dia).</li>
+        <li>Prefira respostas a conversas existentes; evite muitos links na primeira mensagem.</li>
+        <li>Se o número for denunciado, pause (comando <code>pausar</code>) e reduza o volume.</li>
+      </ul>
+    </section>
+    <section class="card">
+      <h3>{% icone "server" 16 %} Como o envio funciona</h3>
+      <p class="small muted" style="margin-top:8px">Telas e rotinas apenas colocam mensagens na fila. Um único processo, <code>whatsapp_worker</code>, mantém a sessão e envia uma de cada vez, com “digitando…” e intervalos aleatórios. Três falhas seguidas pausam a fila por 30 minutos.</p>
+    </section>
+  </aside>
+</div>
+{% endblock %}

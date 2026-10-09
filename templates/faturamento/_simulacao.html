@@ -1,0 +1,19 @@
+<h3>{% icone "eye" 16 %} Prévia</h3>
+{% if incompleto %}
+<p class="muted small">Escolha o contrato e preencha o calendário para ver as próximas emissões.</p>
+{% else %}
+{% include "faturamento/_regra.html" with a=agenda %}
+<h4 class="small muted" style="margin:16px 0 4px;text-transform:uppercase;letter-spacing:.04em">Próximas emissões</h4>
+{% if previstos %}
+<ul class="previa-lista">
+  {% for p in previstos %}
+  <li>
+    <span class="data-chip"><span class="d">{{ p.emissao|date:"d" }}</span><span class="m">{{ p.emissao|date:"M" }}</span></span>
+    <span><strong>Competência {{ p.competencia|date:"m/Y" }}</strong><br><span class="muted small">Vence {{ p.vencimento|data_br }}</span></span>
+    <span class="mono small">{{ valor|brl }}</span>
+  </li>
+  {% endfor %}
+</ul>
+{% else %}<p class="muted small">Nenhuma emissão futura dentro da vigência. Revise a primeira/última competência.</p>{% endif %}
+{% if texto %}<h4 class="small muted" style="margin:14px 0 6px;text-transform:uppercase;letter-spacing:.04em">Discriminação da primeira nota</h4><div class="texto-previa">{{ texto }}</div>{% endif %}
+{% endif %}

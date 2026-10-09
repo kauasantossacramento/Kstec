@@ -99,7 +99,7 @@ def dados_xml(nota):
 
 @transaction.atomic
 def garantir_pdf(nota):
-    nota = NotaFiscal.objects.select_for_update().select_related("xml_autorizado", "pdf", "empresa").get(pk=nota.pk)
+    nota = NotaFiscal.objects.select_for_update(of=("self",)).select_related("xml_autorizado", "pdf", "empresa").get(pk=nota.pk)
     dados = dados_xml(nota)
     if nota.pdf_id:
         return nota.pdf

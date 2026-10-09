@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block titulo %}Ajustar previsão · {{ contrato.numero }}{% endblock %}
+{% block breadcrumb %}{% icone "chevron-right" 14 %}<a href="{% url 'faturamento:recebimentos' %}?mes={{ mes|date:'Y-m' }}">Recebimentos</a>{% icone "chevron-right" 14 %}<span class="atual">{{ contrato.numero }} · {{ mes|date:"m/Y" }}</span>{% endblock %}
+{% block h1 %}Ajustar previsão de {{ mes|date:"F/Y" }}{% endblock %}
+{% block subtitulo %}<p class="sub">{{ contrato.cliente }} · contrato {{ contrato.numero }}. Vale somente para este mês e só altera a previsão — lançamentos e notas não mudam.</p>{% endblock %}
+{% block conteudo %}
+<div class="grid g-2-1">
+  <form method="post" class="card" novalidate>{% csrf_token %}
+    {% include "components/form_campos.html" %}
+    <div class="form-acoes">
+      {% if ajuste %}<button class="btn btn-fantasma" type="submit" name="remover" value="1" style="margin-right:auto">{% icone "trash" 16 %} Remover ajuste</button>{% endif %}
+      <a class="btn" href="{% url 'faturamento:recebimentos' %}?mes={{ mes|date:'Y-m' }}">Cancelar</a>
+      <button class="btn btn-primario" type="submit">{% icone "check" 16 %} Salvar ajuste</button>
+    </div>
+  </form>
+  <aside class="card">
+    <h3>Previsão calculada</h3>
+    {% for i in originais %}
+      {% if i.original %}{% for o in i.original %}<div class="linha entre small" style="padding:6px 0;border-bottom:1px solid var(--line)"><span>{{ o.0|data_br }}</span><span class="mono">{{ o.1|brl }}</span></div>{% endfor %}
+      {% else %}<div class="linha entre small" style="padding:6px 0;border-bottom:1px solid var(--line)"><span>{{ i.data|data_br }} · {{ i.rotulo_origem }}</span><span class="mono">{{ i.valor|brl }}</span></div>{% endif %}
+    {% empty %}<p class="muted small">Nenhum recebimento calculado para este contrato no mês.</p>{% endfor %}
+    <p class="small muted" style="margin-top:12px">Exemplos: o órgão avisou que pagará no dia 20; o empenho atrasou e o valor entra só no mês seguinte (marque “não considerar” aqui e ajuste o outro mês).</p>
+  </aside>
+</div>
+{% endblock %}

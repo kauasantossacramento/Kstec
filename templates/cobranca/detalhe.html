@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block titulo %}Cobrança {{ obj.asaas_id }}{% endblock %}
+{% block breadcrumb %}{% icone "chevron-right" 14 %}<a href="{{ url_lista }}">Cobranças</a>{% icone "chevron-right" 14 %}<span class="atual">{{ obj.asaas_id }}</span>{% endblock %}
+{% block h1 %}Cobrança · {{ obj.valor|brl }}{% endblock %}
+{% block subtitulo %}<p class="sub">{{ obj.lancamento.pessoa }} · vence {{ obj.vencimento|data_br }} · {% badge_obj obj %}{% if obj.ambiente == "SANDBOX" %} <span class="badge badge-neutral">Sandbox</span>{% endif %}</p>{% endblock %}
+{% block acoes %}
+<a class="btn" href="{% url 'financeiro:lancamento_detalhe' obj.lancamento_id %}">{% icone "wallet" 16 %} Lançamento</a>
+{% if pode_escrever %}<form method="post" action="{% url 'cobranca:atualizar' obj.pk %}">{% csrf_token %}<button class="btn" type="submit">{% icone "refresh" 16 %} Atualizar situação</button></form>{% endif %}
+{% if obj.link_fatura %}<a class="btn btn-primario" href="{{ obj.link_fatura }}" target="_blank" rel="noopener">{% icone "link" 16 %} Abrir fatura</a>{% endif %}
+{% endblock %}
+{% block conteudo %}
+<div class="grid g-2-1">
+  <div class="stack">
+    {% if obj.pix_copia_cola and obj.aberta %}
+    <section class="card">
+      <div class="card-cab"><h3>{% icone "qr" 16 %} PIX</h3>{% if obj.pix_expira %}<span class="small muted">válido até {{ obj.pix_expira|date:"d/m/Y H:i" }}</span>{% endif %}</div>
+      <div class="pix">
+        {% if obj.pix_qr %}<img src="data:image/png;base64,{{ obj.pix_qr }}" alt="QR Code PIX da cobrança">{% endif %}
+        <div class="stack">
+          <div class="copia-cola">{{ obj.pix_copia_cola }}</div>
+          <button class="btn" type="button" data-copiar="{{ obj.pix_copia_cola }}">{% icone "check" 16 %} Copiar código PIX</button>
+        </div>
+      </div>
+    </section>
+    {% endif %}
+    <section class="card">
+      <h3>Links</h3>
+      {% if obj.link_fatura %}<div class="linha" style="flex-wrap:nowrap;margin-top:8px"><input class="input mono" value="{{ obj.link_fatura }}" readonly aria-label="Link da fatura"><button class="btn btn-sm" type="button" data-copiar="{{ obj.link_fatura }}">Copiar</button></div>{% endif %}
+      {% if obj.link_boleto %}<p style="margin-top:10px"><a href="{{ obj.link_boleto }}" target="_blank" rel="noopener">{% icone "download" 14 %} Boleto em PDF</a></p>{% endif %}
+      {% if not obj.link_fatura and not obj.link_boleto %}<p class="muted small">Sem links retornados pelo Asaas.</p>{% endif %}
+    </section>
+  </div>
+  <aside class="stack">
+    <section class="card">
+      <h3>Detalhes</h3>
+      <dl class="defs" style="grid-template-columns:1fr;margin-top:8px">
+        <div><dt>Identificador Asaas</dt><dd class="mono">{{ obj.asaas_id }}</dd></div>
+        <div><dt>Forma</dt><dd>{{ obj.get_forma_display }}</dd></div>
+        {% if obj.nota %}<div><dt>NFS-e</dt><dd><a href="{% url 'fiscal:nota_detalhe' obj.nota_id %}">{{ obj.nota.numero_nfse }}</a></dd></div>{% endif %}
+        {% if obj.pago_em %}<div><dt>Pago em</dt><dd>{{ obj.pago_em|data_br }} · {{ obj.valor_pago|brl }}</dd></div>{% endif %}
+      </dl>
+    </section>
+    <section class="card">
+      <h3>Eventos do webhook</h3>
+      {% for e in obj.eventos reversed %}<p class="small" style="margin:6px 0"><span class="mono">{{ e.em|slice:":16"|cut:"T" }}</span> · {{ e.evento }}</p>{% empty %}<p class="muted small">Nenhum evento recebido.</p>{% endfor %}
+    </section>
+  </aside>
+</div>
+{% endblock %}

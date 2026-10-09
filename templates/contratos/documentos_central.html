@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% block titulo %}Documentos e relatórios{% endblock %}
+{% block breadcrumb %}{% icone "chevron-right" 14 %}<span class="atual">Relatórios</span>{% endblock %}
+{% block h1 %}Documentos e relatórios{% endblock %}
+{% block subtitulo %}<p class="sub">Relatórios de atividades, planilhas de custos, relatórios de SLA e documentos assinados de todos os contratos.</p>{% endblock %}
+{% block conteudo %}
+<form method="get" class="filtros card" style="padding:14px 16px">
+  <select class="input select" name="contrato" aria-label="Contrato" data-auto-submit>
+    <option value="">Todos os contratos</option>
+    {% for c in contratos %}<option value="{{ c.pk }}"{% if contrato_sel and contrato_sel.pk == c.pk %} selected{% endif %}>{{ c.numero }} · {{ c.cliente|truncatechars:34 }}</option>{% endfor %}
+  </select>
+  <select class="input select" name="tipo" aria-label="Tipo" data-auto-submit>
+    <option value="">Todos os tipos</option>
+    {% for v, r in tipos %}<option value="{{ v }}"{% if tipo == v %} selected{% endif %}>{{ r }}</option>{% endfor %}
+  </select>
+  <input class="input" type="month" name="mes" value="{{ mes }}" aria-label="Competência" data-auto-submit>
+  {% if contrato_sel or tipo or mes %}<a class="btn btn-fantasma btn-sm" href="?">Limpar filtros</a>{% endif %}
+</form>
+
+<div class="grid g-2-1" style="margin-top:16px">
+  <section>
+    <div class="tabela-wrap responsiva"><table class="tabela">
+      <thead><tr><th>Competência</th><th>Documento</th><th>Contrato</th><th>Origem</th><th>Situação</th><th>Arquivos</th></tr></thead>
+      <tbody>
+      {% for l in linhas %}
+      <tr>
+        <td data-rotulo="Competência" class="mono">{{ l.competencia|date:"m/Y"|default:"—" }}</td>
+        <td data-rotulo="Documento"><strong>{{ l.rotulo }}</strong><br><span class="small muted">{{ l.titulo|truncatechars:60 }}</span></td>
+        <td data-rotulo="Contrato"><a href="{% url 'contratos:contrato_detalhe' l.contrato.pk %}">{{ l.contrato.numero }}</a><br><span class="small muted">{{ l.contrato.cliente|truncatechars:28 }}</span></td>
+        <td data-rotulo="Origem" class="small">{{ l.origem }}</td>
+        <td data-rotulo="Situação">{% status_badge l.cor rotulo=l.situacao %}</td>
+        <td data-rotulo="Arquivos"><div class="linha" style="gap:6px;flex-wrap:nowrap">
+          {% if l.anexo_id %}<a class="btn btn-sm" href="{% url 'core:anexo_baixar' l.anexo_id %}?ver=1" target="_blank" rel="noopener">{% icone "eye" 14 %} Ver</a><a class="btn btn-sm btn-fantasma" href="{% url 'core:anexo_baixar' l.anexo_id %}" aria-label="Baixar">{% icone "download" 14 %}</a>{% endif %}
+          {% if l.anexo_extra_id %}<a class="btn btn-sm btn-fantasma" href="{% url 'core:anexo_baixar' l.anexo_extra_id %}">XLSX</a>{% endif %}
+          {% if l.link %}<a class="btn btn-sm btn-fantasma" href="{{ l.link }}">{% if l.anexo_id %}Abrir{% else %}Revisar{% endif %}</a>{% endif %}
+        </div></td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="6">{% empty_state "Nenhum documento encontrado com estes filtros. Envie os PDFs assinados ou gere relatórios ao lado." %}</td></tr>
+      {% endfor %}
+      </tbody>
+    </table></div>
+  </section>
+  <aside class="stack">
+    {% if pode_enviar %}
+    <form method="post" action="{% url 'relatorios:enviar' %}" enctype="multipart/form-data" class="card stack" novalidate>{% csrf_token %}
+      <h3>{% icone "upload" 16 %} Enviar documento</h3>
+      <p class="small muted" style="margin:0">PDF assinado de relatório, planilha ou SLA. Ele passa a valer no pacote da nota da mesma competência.</p>
+      {% for campo in form %}{% include "components/campo.html" %}{% endfor %}
+      <button class="btn btn-primario" type="submit">{% icone "check" 16 %} Arquivar no contrato</button>
+    </form>
+    <form method="post" action="{% url 'relatorios:sla_gerar' %}" class="card stack">{% csrf_token %}
+      <h3>{% icone "activity" 16 %} Gerar relatório de SLA</h3>
+      <p class="small muted" style="margin:0">Calculado das verificações do monitoramento dos sistemas vinculados ao contrato.</p>
+      <select class="input select" name="contrato" required aria-label="Contrato">{% for c in contratos %}<option value="{{ c.pk }}"{% if contrato_sel and contrato_sel.pk == c.pk %} selected{% endif %}>{{ c.numero }} · {{ c.cliente|truncatechars:30 }}</option>{% endfor %}</select>
+      <input class="input" type="month" name="mes" required value="{{ mes }}" aria-label="Competência">
+      <button class="btn" type="submit">{% icone "play" 16 %} Gerar prévia</button>
+    </form>
+    <section class="card">
+      <h3>{% icone "file-text" 16 %} Relatório e planilha</h3>
+      <p class="small muted">Gerados por competência na tela de documentos do contrato (a partir das tarefas e dos custos).</p>
+      {% if contrato_sel %}<a class="btn" href="{% url 'fiscal:documentos_contrato' contrato_sel.pk %}{% if mes %}?competencia={{ mes }}-01{% endif %}">Abrir documentos de {{ contrato_sel.numero }}</a>{% else %}<p class="xs muted">Escolha um contrato no filtro.</p>{% endif %}
+    </section>
+    {% endif %}
+  </aside>
+</div>
+{% endblock %}

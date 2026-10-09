@@ -1,4 +1,5 @@
 {% extends "crud/detalhe.html" %}
+{% block acoes_extra %}<a class="btn" href="{% url 'cobranca:perfil' obj.pk %}">{% icone "message" 16 %} Comunicação e cobrança</a>{% endblock %}
 {% block extra %}
 <section class="card">
   <div class="card-cab"><h3>Contatos</h3>{% if pode_escrever %}<a class="btn btn-sm" href="{% url 'cadastros:contato_novo' %}?pessoa={{ obj.pk }}">{% icone "plus" 14 %} Contato</a>{% endif %}</div>

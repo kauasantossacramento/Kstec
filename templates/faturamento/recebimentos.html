@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% block titulo %}Previsão de recebimentos{% endblock %}
+{% block breadcrumb %}{% icone "chevron-right" 14 %}<a href="{% url 'faturamento:home' %}">Faturamento</a>{% icone "chevron-right" 14 %}<span class="atual">Recebimentos</span>{% endblock %}
+{% block h1 %}Previsão de recebimentos{% endblock %}
+{% block subtitulo %}<p class="sub">Dia a dia do mês: valores recebidos, lançados, programados e estimados pelos contratos.</p>{% endblock %}
+{% block acoes %}
+<div class="cal-nav">
+  <a class="icone-btn" href="?mes={{ anterior|date:'Y-m' }}" aria-label="Mês anterior">{% icone "chevron-right" 20 "girar" %}</a>
+  <h2>{{ inicio|date:"F Y" }}</h2>
+  <a class="icone-btn" href="?mes={{ proximo|date:'Y-m' }}" aria-label="Próximo mês">{% icone "chevron-right" 20 %}</a>
+  <a class="btn btn-sm" href="?">Hoje</a>
+</div>
+{% endblock %}
+{% block conteudo %}
+<div class="grid g-4" style="margin-bottom:16px">
+  {% kpi_card "Previsto no mês" total icone_nome="trending-up" %}
+  {% kpi_card "Já recebido" totais.RECEBIDO icone_nome="check" %}
+  {% kpi_card "A receber" a_receber icone_nome="clock" %}
+  <div class="card kpi{% if atrasados_anteriores %} alerta{% endif %}"><span class="rotulo">{% icone "alert" 16 %}Em atraso (antes deste mês)</span><span class="valor">{{ valor_atrasados_anteriores|brl }}</span><span class="small muted">{{ atrasados_anteriores }} lançamento(s)</span></div>
+</div>
+
+<div class="grid g-2-1">
+  <section>
+    <div class="linha entre" style="margin-bottom:10px">
+      <div class="legenda">{% for chave, o in origens.items %}<span><i class="ponto {{ o.1 }}"></i>{{ o.0 }}</span>{% endfor %}</div>
+      <span class="small muted">Clique em um dia para ver os detalhes</span>
+    </div>
+    <div class="calendario" aria-label="Recebimentos de {{ inicio|date:'F Y' }}">
+      <div class="dsem">Seg</div><div class="dsem">Ter</div><div class="dsem">Qua</div><div class="dsem">Qui</div><div class="dsem">Sex</div><div class="dsem">Sáb</div><div class="dsem">Dom</div>
+      {% for semana in semanas %}{% for d in semana %}
+      <a href="?mes={{ inicio|date:'Y-m' }}&amp;dia={{ d.data|date:'Y-m-d' }}#dia" class="dia{% if d.fora %} fora{% endif %}{% if d.hoje %} hoje{% endif %}{% if d.fim_semana %} fim-semana{% endif %}{% if not d.itens %} vazio{% endif %}{% if selecionado == d.data %} sel{% endif %}" aria-label="{{ d.data|date:'d/m' }}{% if d.total %}: {{ d.total|brl }}{% endif %}">
+        <span class="n">{{ d.data|date:"j" }}</span>
+        {% if d.origens %}<span class="pontos">{% for o in d.origens %}{% with cor=origens|get:o %}<i class="ponto {{ cor.1 }}"></i>{% endwith %}{% endfor %}</span>{% endif %}
+        {% if d.total %}<span class="total">{{ d.total|brl }}</span>{% endif %}
+      </a>
+      {% endfor %}{% endfor %}
+    </div>
+    <section class="card" style="margin-top:16px">
+      <div class="card-cab"><h3>Evolução no mês</h3>{% if pico.0 %}<span class="small muted">Maior dia: {{ pico.0|data_br }} · {{ pico.1|brl }}</span>{% endif %}</div>
+      <div style="height:220px"><canvas data-grafico="grafico-recebimentos" aria-label="Recebimento previsto e realizado acumulado"></canvas></div>
+      {{ grafico|json_script:"grafico-recebimentos" }}
+    </section>
+  </section>
+
+  <aside class="stack">
+    <section class="card" id="dia">
+      {% if selecionado %}
+      <div class="card-cab"><h3>{{ selecionado|date:"l, j \d\e F" }}</h3><a class="small" href="?mes={{ inicio|date:'Y-m' }}">Ver mês</a></div>
+      {% for i in itens_dia %}{% include "faturamento/_item_previsao.html" %}{% empty %}<p class="muted small">Nenhum recebimento previsto neste dia.</p>{% endfor %}
+      {% else %}
+      <div class="card-cab"><h3>Recebimentos do mês</h3><span class="badge badge-neutral">{{ itens|length }}</span></div>
+      {% for i in itens %}{% include "faturamento/_item_previsao.html" with mostrar_data=True %}{% empty %}{% empty_state "Nenhum recebimento previsto para este mês." %}{% endfor %}
+      {% endif %}
+    </section>
+    {% if ajustes %}
+    <section class="card">
+      <h3>{% icone "edit" 16 %} Ajustes deste mês</h3>
+      {% for i in ajustes %}<p class="small" style="margin:6px 0"><strong>{{ i.contrato.numero }}</strong> · {{ i.ajuste.motivo }}</p>{% endfor %}
+    </section>
+    {% endif %}
+  </aside>
+</div>
+{% endblock %}

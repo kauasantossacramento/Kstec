@@ -4,7 +4,6 @@ from datetime import timedelta
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
-from django.core.mail import send_mail
 from django.utils import timezone
 
 from ..models import Notificacao
@@ -36,7 +35,12 @@ def notificar(usuarios, titulo, mensagem="", nivel="info", link="", email=False,
         criadas.append(n)
         if email and u.email:
             corpo = mensagem + (f"\n\nAcesse: {settings.SITE_URL}{link}" if link else "")
-            send_mail(f"[KS CENTRAL] {titulo}", corpo, settings.DEFAULT_FROM_EMAIL, [u.email], fail_silently=True)
+            from .email import enviar
+
+            try:
+                enviar("ALERTAS", f"[KS CENTRAL] {titulo}", corpo, [u.email], empresa=n.empresa)
+            except Exception:  # noqa: BLE001 — notificação no app já foi registrada.
+                pass
     return criadas
 
 

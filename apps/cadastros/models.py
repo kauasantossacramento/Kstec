@@ -1,7 +1,8 @@
 from django.db import models
+from django.db.models import Q
 
 from apps.core.models import Endereco, ModeloBase
-from apps.core.validadores import formatar_doc, so_digitos, validar_cpf_cnpj
+from apps.core.validadores import formatar_doc, so_digitos, validar_cpf_cnpj_opcional
 
 
 class Pessoa(ModeloBase):
@@ -17,7 +18,8 @@ class Pessoa(ModeloBase):
         FEDERAL = "FEDERAL", "Federal"
 
     tipo = models.CharField(max_length=1, choices=Tipo.choices, default=Tipo.JURIDICA)
-    cpf_cnpj = models.CharField("CPF/CNPJ", max_length=14, validators=[validar_cpf_cnpj])
+    cpf_cnpj = models.CharField("CPF/CNPJ", max_length=14, blank=True, validators=[validar_cpf_cnpj_opcional],
+                                help_text="Pode ficar em branco enquanto o CNPJ não existe; a emissão de nota fica bloqueada.")
     razao_social = models.CharField("razão social / nome", max_length=200)
     nome_fantasia = models.CharField(max_length=200, blank=True)
     situacao_cadastral = models.CharField("situação cadastral", max_length=100, blank=True)
@@ -33,6 +35,9 @@ class Pessoa(ModeloBase):
     endereco = models.ForeignKey(Endereco, null=True, blank=True, on_delete=models.SET_NULL)
     email = models.EmailField("e-mail", blank=True)
     email_nf = models.EmailField("e-mail para NF", blank=True, help_text="Destino do envio automático da nota.")
+    emails_documentos = models.TextField("outros e-mails para notas e documentos", blank=True,
+                                         help_text="Separe por vírgula ou ponto e vírgula. Usados no envio de NFS-e, "
+                                                   "relatórios e pacotes do contrato.")
     telefone = models.CharField(max_length=30, blank=True)
     eh_cliente = models.BooleanField("cliente", default=True)
     eh_fornecedor = models.BooleanField("fornecedor", default=False)
@@ -45,14 +50,16 @@ class Pessoa(ModeloBase):
         verbose_name = "pessoa"
         verbose_name_plural = "clientes e fornecedores"
         ordering = ["razao_social"]
-        constraints = [models.UniqueConstraint(fields=["empresa", "cpf_cnpj"], name="pessoa_doc_unico_empresa")]
+        constraints = [models.UniqueConstraint(fields=["empresa", "cpf_cnpj"], condition=~Q(cpf_cnpj=""),
+                                               name="pessoa_doc_unico_empresa")]
 
     def __str__(self):
         return self.nome_fantasia or self.razao_social
 
     def save(self, *args, **kwargs):
         self.cpf_cnpj = so_digitos(self.cpf_cnpj)
-        self.tipo = "F" if len(self.cpf_cnpj) == 11 else "J"
+        if len(self.cpf_cnpj) in (11, 14):
+            self.tipo = "F" if len(self.cpf_cnpj) == 11 else "J"
         super().save(*args, **kwargs)
 
     @property
@@ -62,6 +69,23 @@ class Pessoa(ModeloBase):
     @property
     def email_destino_nf(self):
         return self.email_nf or self.email
+
+    @property
+    def emails_envio(self) -> list[str]:
+        """E-mails para notas e documentos, sem repetição: e-mail de NF, lista adicional e contatos de relatórios."""
+        import re
+
+        lista = [self.email_nf or self.email] + re.split(r"[;,\s]+", self.emails_documentos or "")
+        if self.pk:
+            lista += list(self.contatos.filter(recebe_relatorios=True, ativo=True).exclude(email="")
+                          .values_list("email", flat=True))
+        vistos, saida = set(), []
+        for e in lista:
+            e = (e or "").strip().lower()
+            if e and "@" in e and e not in vistos:
+                vistos.add(e)
+                saida.append(e)
+        return saida
 
     def snapshot(self) -> dict:
         """Dados congelados no momento da emissão da nota (tomador_snapshot)."""

@@ -7,7 +7,11 @@ MENU = [
     {"rotulo": "Contratos", "url": "contratos:contrato_lista", "icone": "file-text", "prefixo": "/contratos/"},
     {"rotulo": "Cadastros", "url": "cadastros:pessoa_lista", "icone": "users", "prefixo": "/cadastros/"},
     {"rotulo": "Fiscal", "url": "fiscal:nota_lista", "icone": "receipt", "prefixo": "/fiscal/"},
+    {"rotulo": "Faturamento", "url": "faturamento:home", "icone": "repeat", "prefixo": "/faturamento/",
+     "papeis": ["Fiscal", "Financeiro", "Leitura"]},
     {"rotulo": "Financeiro", "url": "financeiro:home", "icone": "wallet", "prefixo": "/financeiro/", "papeis": ["Financeiro", "Fiscal", "Leitura"]},
+    {"rotulo": "WhatsApp", "url": "whatsapp:home", "icone": "message", "prefixo": "/whatsapp/",
+     "papeis": ["Fiscal", "Financeiro", "Leitura"]},
     {"rotulo": "Comercial", "url": "comercial:orcamento_lista", "icone": "briefcase", "prefixo": "/comercial/"},
     {"rotulo": "Catálogo", "url": "catalogo:item_lista", "icone": "package", "prefixo": "/catalogo/"},
     {"rotulo": "Operação", "url": "operacao:tarefa_lista", "icone": "check-square", "prefixo": "/operacao/"},
@@ -24,6 +28,7 @@ MENU_RODAPE = [
 
 NOVO = [
     {"rotulo": "Nota fiscal", "url": "fiscal:nota_nova", "papeis": ["Fiscal", "Financeiro"]},
+    {"rotulo": "Faturamento recorrente", "url": "faturamento:agenda_nova", "papeis": ["Fiscal", "Financeiro"]},
     {"rotulo": "Orçamento", "url": "comercial:orcamento_novo", "papeis": None},
     {"rotulo": "Lançamento", "url": "financeiro:lancamento_novo", "papeis": ["Financeiro"]},
     {"rotulo": "Tarefa", "url": "operacao:tarefa_nova", "papeis": ["Operação"]},

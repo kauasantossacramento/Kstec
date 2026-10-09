@@ -455,6 +455,8 @@ class LogIntegracao(ModeloSimples):
         VIACEP = "VIACEP", "ViaCEP"
         SLA = "SLA", "Monitoramento"
         EMAIL = "EMAIL", "E-mail"
+        ASAAS = "ASAAS", "Asaas"
+        WHATSAPP = "WHATSAPP", "WhatsApp"
 
     servico = models.CharField(max_length=12, choices=Servico.choices)
     operacao = models.CharField(max_length=60)
@@ -514,3 +516,39 @@ class Contador(models.Model):
             obj.valor += 1
             obj.save(update_fields=["valor"])
             return obj.valor
+
+
+class ContaEmail(ModeloBase):
+    """Remetente SMTP configurável pela tela. Senha cifrada (Segredo); uma conta por finalidade."""
+
+    class Finalidade(models.TextChoices):
+        ALERTAS = "ALERTAS", "Alertas e avisos do sistema"
+        DOCUMENTOS = "DOCUMENTOS", "Notas fiscais e documentos a clientes"
+
+    class Seguranca(models.TextChoices):
+        SSL = "SSL", "SSL/TLS implícito (porta 465)"
+        STARTTLS = "STARTTLS", "STARTTLS (porta 587)"
+
+    finalidade = models.CharField(max_length=12, choices=Finalidade.choices)
+    nome_remetente = models.CharField("nome do remetente", max_length=100, default="KS TEC")
+    email = models.EmailField("e-mail remetente")
+    host = models.CharField("servidor SMTP", max_length=150, default="smtp.hostinger.com")
+    porta = models.PositiveIntegerField(default=587, help_text="Hetzner bloqueia a 465: use 587 com STARTTLS.")
+    seguranca = models.CharField("segurança", max_length=10, choices=Seguranca.choices, default=Seguranca.STARTTLS)
+    usuario = models.CharField("usuário", max_length=150, blank=True, help_text="Vazio usa o próprio e-mail.")
+    senha = models.ForeignKey(Segredo, null=True, blank=True, on_delete=models.PROTECT, editable=False, related_name="+")
+    copia_para = models.EmailField("cópia oculta para", blank=True, help_text="Opcional: recebe uma cópia de cada envio.")
+    testado_em = models.DateTimeField(null=True, blank=True, editable=False)
+    ultimo_erro = models.CharField(max_length=300, blank=True, editable=False)
+
+    class Meta:
+        verbose_name = "conta de e-mail"
+        verbose_name_plural = "contas de e-mail"
+        constraints = [models.UniqueConstraint(fields=["empresa", "finalidade"], name="conta_email_finalidade_unica")]
+
+    def __str__(self):
+        return f"{self.get_finalidade_display()} · {self.email}"
+
+    @property
+    def remetente(self):
+        return f"{self.nome_remetente} <{self.email}>"

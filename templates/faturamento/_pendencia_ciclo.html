@@ -1,0 +1,15 @@
+<div class="pendencia {{ nivel }}">
+  <span class="data-chip"><span class="d">{{ c.data_emissao|date:"d" }}</span><span class="m">{{ c.data_emissao|date:"M" }}</span></span>
+  <div class="txt">
+    <strong>{{ c.agenda.contrato.cliente }} · {{ c.agenda.contrato.numero }}</strong>
+    <span class="small muted">Competência {{ c.competencia|date:"m/Y" }} · <span class="mono">{{ c.valor|brl }}</span>{% if c.mensagem %} · {{ c.mensagem|truncatechars:160 }}{% endif %}</span>
+  </div>
+  <div class="acoes-inline">
+    {% if c.status == "AGUARDANDO" and pode_transmitir %}
+    <form method="post" action="{% url 'faturamento:ciclo_acao' c.pk 'confirmar' %}" data-confirmar="A NFS-e de {{ c.valor|brl }} para {{ c.agenda.contrato.cliente }} (competência {{ c.competencia|date:'m/Y' }}) será transmitida agora ao emissor." data-confirmar-titulo="Transmitir NFS-e?" data-confirmar-botao="Transmitir" data-confirmar-perigo="0">{% csrf_token %}<input type="hidden" name="_proximo" value="{{ request.get_full_path }}"><button class="btn btn-primario btn-sm" type="submit">{% icone "send" 14 %} Confirmar e transmitir</button></form>
+    {% elif c.status == "RASCUNHO" and c.nota_id %}
+    <a class="btn btn-sm" href="{% url 'fiscal:nota_detalhe' c.nota_id %}">{% icone "eye" 14 %} Revisar nota</a>
+    {% endif %}
+    <a class="btn btn-sm btn-fantasma" href="{% url 'faturamento:ciclo' c.pk %}">Detalhes {% icone "chevron-right" 14 %}</a>
+  </div>
+</div>

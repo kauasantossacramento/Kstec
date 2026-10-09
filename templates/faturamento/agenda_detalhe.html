@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% block titulo %}Agenda · {{ obj.contrato.numero }}{% endblock %}
+{% block breadcrumb %}{% icone "chevron-right" 14 %}<a href="{% url 'faturamento:home' %}">Faturamento</a>{% icone "chevron-right" 14 %}<span class="atual">{{ obj.contrato.numero }}</span>{% endblock %}
+{% block h1 %}Faturamento · {{ obj.contrato.numero }}{% endblock %}
+{% block subtitulo %}<p class="sub">{{ obj.contrato.cliente }} · {{ obj.item_catalogo }} · {% if obj.ativo %}<span class="estado">Ativa</span>{% else %}<span class="estado pausada">Pausada</span>{% endif %}</p>{% endblock %}
+{% block acoes %}
+<a class="btn" href="{% url 'contratos:contrato_detalhe' obj.contrato.pk %}?aba=faturamento">{% icone "file-text" 16 %} Contrato</a>
+{% if pode_escrever %}
+<form method="post" action="{% url 'faturamento:agenda_ativar' obj.pk %}" {% if obj.ativo %}data-confirmar="Nenhuma nova emissão será preparada enquanto a agenda estiver pausada. Ciclos já transmitidos continuam sendo acompanhados." data-confirmar-titulo="Pausar agenda?" data-confirmar-botao="Pausar"{% endif %}>{% csrf_token %}<button class="btn" type="submit">{% if obj.ativo %}{% icone "pause" 16 %} Pausar{% else %}{% icone "play" 16 %} Retomar{% endif %}</button></form>
+<a class="btn btn-primario" href="{% url 'faturamento:agenda_editar' obj.pk %}">{% icone "edit" 16 %} Editar</a>
+{% endif %}
+{% endblock %}
+{% block conteudo %}
+<div class="grid g-2-1">
+  <div class="stack">
+    {% include "faturamento/_regra.html" with a=obj %}
+    <section>
+      <div class="card-cab"><h2>Competências</h2><span class="small muted">{{ totais.n|default:0 }} autorizada(s) · {{ totais.v|default:0|brl }}</span></div>
+      <div class="tabela-wrap responsiva"><table class="tabela">
+        <thead><tr><th>Competência</th><th>Emissão</th><th>Vencimento</th><th class="num">Valor</th><th>Situação</th><th>Nota</th></tr></thead>
+        <tbody>
+        {% for c in ciclos %}
+        <tr class="clicavel" data-href="{% url 'faturamento:ciclo' c.pk %}">
+          <td data-rotulo="Competência"><a href="{% url 'faturamento:ciclo' c.pk %}" class="mono"><strong>{{ c.competencia|date:"m/Y" }}</strong></a>{% if c.personalizado %} <span class="badge badge-neutral" title="Ajustado só neste mês">ajustado</span>{% endif %}</td>
+          <td data-rotulo="Emissão">{{ c.data_emissao|data_br }}</td>
+          <td data-rotulo="Vencimento">{{ c.data_vencimento|data_br }}</td>
+          <td data-rotulo="Valor" class="num mono">{{ c.valor|brl }}</td>
+          <td data-rotulo="Situação">{% badge_obj c %}</td>
+          <td data-rotulo="Nota">{% if c.nota %}<a href="{% url 'fiscal:nota_detalhe' c.nota.pk %}" class="mono">{{ c.nota.numero_nfse|default:"rascunho" }}</a>{% else %}<span class="muted">—</span>{% endif %}</td>
+        </tr>
+        {% endfor %}
+        {% for p in futuros %}
+        <tr style="opacity:.7">
+          <td data-rotulo="Competência" class="mono">{{ p.competencia|date:"m/Y" }}</td><td data-rotulo="Emissão">{{ p.emissao|data_br }}</td>
+          <td data-rotulo="Vencimento">{{ p.vencimento|data_br }}</td><td data-rotulo="Valor" class="num mono">{{ obj.valor|brl }}</td>
+          <td data-rotulo="Situação"><span class="badge badge-neutral"><span class="dot"></span>Futuro</span></td><td data-rotulo="Nota"><span class="muted small">planejado até 60 dias antes</span></td>
+        </tr>
+        {% endfor %}
+        {% if not ciclos and not futuros %}<tr><td colspan="6">{% empty_state "Nenhuma competência dentro da vigência." %}</td></tr>{% endif %}
+        </tbody>
+      </table></div>
+    </section>
+  </div>
+  <aside class="stack">
+    <section class="card">
+      <h3>{% icone "clock" 16 %} Próxima emissão</h3>
+      {% if proxima %}
+      <div class="linha" style="gap:14px;margin-top:8px">
+        <span class="data-chip" style="width:58px"><span class="d">{{ proxima.emissao|date:"d" }}</span><span class="m">{{ proxima.emissao|date:"M" }}</span></span>
+        <div><strong>Competência {{ proxima.competencia|date:"m/Y" }}</strong><br><span class="small muted">às {{ obj.hora_emissao|time:"H:i" }} · vence {{ proxima.vencimento|data_br }}</span></div>
+      </div>
+      {% elif not obj.ativo %}<p class="muted small">Agenda pausada.</p>{% else %}<p class="muted small">Sem emissões futuras na vigência.</p>{% endif %}
+    </section>
+    <section class="card">
+      <h3>Configuração</h3>
+      <dl class="defs" style="grid-template-columns:1fr">
+        <div><dt>Serviço</dt><dd>{{ obj.item_catalogo }}</dd></div>
+        <div><dt>Perfil fiscal</dt><dd>{{ obj.perfil|default:"Padrão da configuração fiscal" }}</dd></div>
+        <div><dt>Competências</dt><dd>{{ obj.inicio|date:"m/Y" }} → {{ obj.fim_efetivo|date:"m/Y" }}{% if not obj.fim %} <span class="muted small">(vigência)</span>{% endif %}</dd></div>
+        <div><dt>Ativa desde</dt><dd>{{ obj.ativa_desde|data_br }}</dd></div>
+        <div><dt>Envio ao cliente</dt><dd>{% if obj.enviar_whatsapp %}WhatsApp{% else %}—{% endif %}{% if obj.gerar_cobranca %} · cobrança Asaas{% endif %}</dd></div>
+        {% if obj.observacoes %}<div><dt>Observações</dt><dd>{{ obj.observacoes|linebreaksbr }}</dd></div>{% endif %}
+      </dl>
+    </section>
+  </aside>
+</div>
+{% endblock %}

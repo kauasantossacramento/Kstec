@@ -27,7 +27,7 @@ class PessoaForm(FormKS):
     class Meta:
         model = Pessoa
         fields = ["cpf_cnpj", "razao_social", "nome_fantasia", "inscricao_municipal", "inscricao_estadual",
-                  "email", "email_nf", "telefone", "eh_cliente", "eh_fornecedor", "e_orgao_publico", "esfera",
+                  "email", "email_nf", "emails_documentos", "telefone", "eh_cliente", "eh_fornecedor", "e_orgao_publico", "esfera",
                   "optante_simples", "situacao_cadastral", "data_abertura", "cnae_principal", "descricao_cnae",
                   "natureza_juridica", "porte", "observacoes"]
 
@@ -35,7 +35,9 @@ class PessoaForm(FormKS):
         super().__init__(*a, **kw)
         self.fields["cpf_cnpj"].widget.attrs["data-consulta-cnpj"] = reverse_lazy("core:consulta_cnpj")
         self.fields["cpf_cnpj"].widget.attrs["autofocus"] = True
-        self.fields["cpf_cnpj"].help_text = "Digite o CNPJ e saia do campo ou clique em Consultar CNPJ. Confira os dados antes de salvar."
+        self.fields["cpf_cnpj"].help_text = ("Digite o CNPJ e saia do campo ou clique em Consultar CNPJ. Confira os dados "
+                                             "antes de salvar. Em branco se ainda não houver CNPJ (sem emissão de nota).")
+        self.fields["emails_documentos"].widget.attrs.update({"rows": 2, "placeholder": "financeiro@cliente.gov.br; fiscal@cliente.gov.br"})
         self.fields["cep"].widget.attrs["data-consulta-cep"] = reverse_lazy("core:consulta_cep")
         e = self.instance.endereco if self.instance.pk else None
         if e:
@@ -44,6 +46,8 @@ class PessoaForm(FormKS):
 
     def clean_cpf_cnpj(self):
         doc = so_digitos(self.cleaned_data["cpf_cnpj"])
+        if not doc:
+            return ""
         from apps.core import contexto
 
         qs = Pessoa.objects.filter(cpf_cnpj=doc, empresa=contexto.empresa_atual())
@@ -52,6 +56,19 @@ class PessoaForm(FormKS):
         if qs.exists():
             raise forms.ValidationError("Já existe cadastro com este CPF/CNPJ.")
         return doc
+
+    def clean_emails_documentos(self):
+        import re
+
+        from django.core.validators import validate_email
+
+        partes = [p.strip() for p in re.split(r"[;,\s]+", self.cleaned_data.get("emails_documentos") or "") if p.strip()]
+        for p in partes:
+            try:
+                validate_email(p)
+            except forms.ValidationError:
+                raise forms.ValidationError(f"E-mail inválido: {p}")
+        return "; ".join(partes)
 
     def clean(self):
         dados = super().clean()

@@ -47,6 +47,10 @@ LOCAL_APPS = [
     "apps.fiscal",
     "apps.financeiro",
     "apps.operacao",
+    "apps.faturamento",
+    "apps.cobranca",
+    "apps.mensageria",
+    "apps.sla",
     "apps.painel",
 ]
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
@@ -157,24 +161,17 @@ CELERY_TIMEZONE = TIME_ZONE
 CELERY_TASK_TIME_LIMIT = 300
 CELERY_TASK_SOFT_TIME_LIMIT = 240
 CELERY_BEAT_SCHEDULER = "django_celery_beat.schedulers:DatabaseScheduler"
+# Tarefas planejadas ainda sem implementação (fiscal.alertar_certificado, fiscal.criar_guias_iss,
+# fiscal.verificar_adn, relatorios.lembrete_competencia, ia.verificar_limite_custo) ficam fora do agendamento
+# até existirem; ver docs/PASSAGEM_AGENTE_IA.md.
 CELERY_BEAT_SCHEDULE = {
     "sla.despachar_verificacoes": {"task": "apps.sla.tasks.despachar_verificacoes", "schedule": 60.0},
-    "sla.agregar_dia": {"task": "apps.sla.tasks.agregar_dia", "schedule": crontab(hour=0, minute=15)},
     "sla.limpar_brutos": {"task": "apps.sla.tasks.limpar_brutos", "schedule": crontab(hour=3, minute=0)},
     "sla.verificar_ssl_todos": {"task": "apps.sla.tasks.verificar_ssl_todos", "schedule": crontab(hour=6, minute=0)},
     "certidoes.alertar_vencimentos": {
         "task": "apps.certidoes.tasks.alertar_vencimentos",
         "schedule": crontab(hour=7, minute=0),
     },
-    "fiscal.alertar_certificado": {
-        "task": "apps.fiscal.tasks.alertar_certificado",
-        "schedule": crontab(hour=7, minute=5),
-    },
-    "fiscal.criar_guias_iss": {
-        "task": "apps.fiscal.tasks.criar_guias_iss",
-        "schedule": crontab(day_of_month=1, hour=8, minute=0),
-    },
-    "fiscal.verificar_adn": {"task": "apps.fiscal.tasks.verificar_notas_el_no_adn", "schedule": crontab(minute=20)},
     "contratos.alertar_vigencia_saldo": {
         "task": "apps.contratos.tasks.alertar_vigencia_saldo",
         "schedule": crontab(hour=7, minute=10),
@@ -187,16 +184,26 @@ CELERY_BEAT_SCHEDULE = {
         "task": "apps.financeiro.tasks.gerar_recorrencias",
         "schedule": crontab(hour=0, minute=35),
     },
+    # Faturamento recorrente de NFS-e (prioridade): planeja, emite no horário e consulta resultados.
+    "faturamento.planejar_ciclos": {
+        "task": "apps.faturamento.tasks.planejar_ciclos",
+        "schedule": crontab(hour=0, minute=40),
+    },
+    "faturamento.processar_ciclos": {
+        "task": "apps.faturamento.tasks.processar_ciclos",
+        "schedule": crontab(minute="*/15"),
+    },
+    "faturamento.acompanhar_transmissoes": {
+        "task": "apps.faturamento.tasks.acompanhar_transmissoes",
+        "schedule": crontab(minute="*/10"),
+    },
+    # WhatsApp: rotinas (lembretes, resumo, expiração). O envio é feito pelo processo whatsapp_worker.
+    "mensageria.rotinas_whatsapp": {"task": "apps.mensageria.tasks.rotinas_whatsapp", "schedule": crontab(minute="*/10")},
     "comercial.expirar_orcamentos": {
         "task": "apps.comercial.tasks.expirar_orcamentos",
         "schedule": crontab(hour=9, minute=0),
     },
     "comercial.followup": {"task": "apps.comercial.tasks.followup", "schedule": crontab(hour=9, minute=5)},
-    "relatorios.lembrete_competencia": {
-        "task": "apps.relatorios.tasks.lembrete_competencia",
-        "schedule": crontab(day_of_month=1, hour=9, minute=0),
-    },
-    "ia.verificar_limite_custo": {"task": "apps.ia.tasks.verificar_limite_custo", "schedule": crontab(hour=8, minute=0)},
     "core.lembrete_teste_restauracao": {
         "task": "apps.core.tasks.lembrete_teste_restauracao",
         "schedule": crontab(day_of_month=5, hour=8, minute=30),
@@ -207,6 +214,16 @@ CELERY_BEAT_SCHEDULE = {
 EMAIL_CONFIG = env.email_url("EMAIL_URL", default="consolemail://")
 vars().update(EMAIL_CONFIG)
 DEFAULT_FROM_EMAIL = env("DEFAULT_FROM_EMAIL", default="KS TEC <nao-responda@kstec.online>")
+# Contas SMTP cadastradas na tela (Configurações → E-mails). Desligado nos perfis local e de testes.
+EMAIL_CONTAS_SMTP = env.bool("EMAIL_CONTAS_SMTP", default=True)
+
+# WhatsApp (neonize): sessão do aparelho fora do Git e do banco principal; um worker por número.
+WHATSAPP_SESSAO = env("WHATSAPP_SESSAO", default=str(BASE_DIR / ".tools" / "whatsapp" / "sessao.sqlite3"))
+
+# Celery: tarefas idempotentes; o beat roda em processo único (DatabaseScheduler).
+CELERY_TASK_ACKS_LATE = True
+CELERY_WORKER_PREFETCH_MULTIPLIER = 1
+CELERY_BROKER_TRANSPORT_OPTIONS = {"visibility_timeout": 3600}
 
 # Segredos (Fernet) — seção 3.3
 FIELD_ENCRYPTION_KEY = env("FIELD_ENCRYPTION_KEY", default="")

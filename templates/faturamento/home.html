@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% block titulo %}Faturamento recorrente{% endblock %}
+{% block breadcrumb %}{% icone "chevron-right" 14 %}<span class="atual">Faturamento</span>{% endblock %}
+{% block h1 %}Faturamento recorrente{% endblock %}
+{% block subtitulo %}<p class="sub">Emissão mensal programada das NFS-e dos contratos, com confirmação, cobrança e envio ao cliente.</p>{% endblock %}
+{% block acoes %}
+<a class="btn" href="{% url 'faturamento:recebimentos' %}">{% icone "calendar" 16 %} Previsão de recebimentos</a>
+{% if pode_escrever %}<a class="btn btn-primario" href="{% url 'faturamento:agenda_nova' %}">{% icone "plus" 16 %} Nova agenda</a>{% endif %}
+{% endblock %}
+{% block conteudo %}
+{% if automacao_eager and pode_transmitir %}
+<div class="alerta">{% icone "info" 18 %}<div class="small" style="flex:1">Perfil local: sem Celery beat, as rotinas rodam quando você aciona abaixo. Em produção o beat (Redis) planeja diariamente, processa a cada 15 minutos e consulta resultados a cada 10.</div>
+<form method="post" action="{% url 'faturamento:rodar_rotina' %}" data-confirmar="Planeja ciclos, executa emissões vencidas conforme o modo de cada agenda e consulta transmissões pendentes." data-confirmar-titulo="Executar rotina agora?" data-confirmar-botao="Executar" data-confirmar-perigo="0">{% csrf_token %}<button class="btn btn-sm" type="submit">{% icone "play" 14 %} Executar rotina agora</button></form></div>
+{% endif %}
+<div class="grid g-4" style="margin-bottom:18px">
+  {% kpi_card "A faturar neste mês" kpi_mes icone_nome="receipt" %}
+  <div class="card kpi"><span class="rotulo">{% icone "check" 16 %}Emitidas neste mês</span><span class="valor">{{ kpi_emitidas }}<span class="muted" style="font-size:var(--fs-lg)"> / {{ kpi_total_mes }}</span></span></div>
+  {% kpi_card "Aguardando confirmação" aguardando.count formato="int" alerta=False icone_nome="clock" %}
+  {% kpi_card "Bloqueios e falhas" problemas.count formato="int" alerta=problemas.exists icone_nome="alert" %}
+</div>
+
+{% if aguardando or problemas or rascunhos %}
+<section style="margin-bottom:20px">
+  <div class="card-cab"><h2>Precisa da sua ação</h2></div>
+  {% for c in aguardando %}{% include "faturamento/_pendencia_ciclo.html" with nivel="warning" %}{% endfor %}
+  {% for c in problemas %}{% include "faturamento/_pendencia_ciclo.html" with nivel="danger" %}{% endfor %}
+  {% for c in rascunhos %}{% include "faturamento/_pendencia_ciclo.html" with nivel="info" %}{% endfor %}
+</section>
+{% endif %}
+
+{% if linhas %}
+<div class="grid g-2-1">
+  <section>
+    <div class="card-cab"><h2>Agendas</h2>{% if sem_agenda %}<span class="small muted">{{ sem_agenda }} contrato(s) mensal(is) vigente(s) sem agenda</span>{% endif %}</div>
+    <div class="tabela-wrap responsiva"><table class="tabela">
+      <thead><tr><th>Contrato</th><th>Regra</th><th class="num">Valor</th><th>Próxima emissão</th><th>Situação</th></tr></thead>
+      <tbody>
+      {% for l in linhas %}{% with a=l.agenda %}
+      <tr class="clicavel" data-href="{% url 'faturamento:agenda' a.pk %}">
+        <td data-rotulo="Contrato"><a href="{% url 'faturamento:agenda' a.pk %}"><strong>{{ a.contrato.numero }}</strong></a><br><span class="small muted">{{ a.contrato.cliente|truncatechars:38 }}</span></td>
+        <td data-rotulo="Regra" class="small">Dia {{ a.dia_emissao }} · {{ a.get_modo_display|lower|truncatechars:34 }}</td>
+        <td data-rotulo="Valor" class="num mono">{{ a.valor|brl }}</td>
+        <td data-rotulo="Próxima">{% if l.proxima %}{{ l.proxima.emissao|data_br }}{% else %}<span class="muted">—</span>{% endif %}</td>
+        <td data-rotulo="Situação">{% if a.ativo %}<span class="estado">Ativa</span>{% else %}<span class="estado pausada">Pausada</span>{% endif %}</td>
+      </tr>
+      {% endwith %}{% endfor %}
+      </tbody>
+    </table></div>
+  </section>
+  <section class="card">
+    <div class="card-cab"><h3>{% icone "calendar" 16 %} Próximas emissões</h3></div>
+    {% if proximas %}
+    <ul class="previa-lista">
+      {% for c in proximas %}
+      <li>
+        <span class="data-chip{% if c.data_emissao == hoje %} hoje{% endif %}"><span class="d">{{ c.data_emissao|date:"d" }}</span><span class="m">{{ c.data_emissao|date:"M" }}</span></span>
+        <span><a href="{% url 'faturamento:ciclo' c.pk %}"><strong>{{ c.agenda.contrato.numero }}</strong></a> <span class="small muted">· {{ c.competencia|date:"m/Y" }}</span><br>{% badge_obj c %}</span>
+        <span class="mono small">{{ c.valor|brl }}</span>
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}<p class="muted small">Nenhuma emissão nos próximos 45 dias.</p>{% endif %}
+  </section>
+</div>
+{% else %}
+<div class="card">
+  {% if pode_escrever %}{% url 'faturamento:agenda_nova' as url_nova %}{% empty_state "Nenhuma agenda de faturamento. Programe a primeira para que as notas mensais sejam preparadas sozinhas." url_nova "Criar agenda" %}{% else %}{% empty_state "Nenhuma agenda de faturamento." %}{% endif %}
+  {% if sem_agenda %}<p class="small muted" style="text-align:center;margin-top:-16px">{{ sem_agenda }} contrato(s) mensal(is) vigente(s) aguardando agenda.</p>{% endif %}
+</div>
+{% endif %}
+{% endblock %}

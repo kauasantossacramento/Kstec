@@ -1,0 +1,33 @@
+{% if agenda %}
+<div class="grid g-2-1">
+  <div class="stack">
+    {% include "faturamento/_regra.html" with a=agenda %}
+    <div class="tabela-wrap responsiva"><table class="tabela">
+      <thead><tr><th>Competência</th><th>Emissão</th><th class="num">Valor</th><th>Situação</th><th>Nota</th></tr></thead>
+      <tbody>{% for c in ciclos %}
+        <tr class="clicavel" data-href="{% url 'faturamento:ciclo' c.pk %}">
+          <td data-rotulo="Competência" class="mono"><a href="{% url 'faturamento:ciclo' c.pk %}">{{ c.competencia|date:"m/Y" }}</a></td>
+          <td data-rotulo="Emissão">{{ c.data_emissao|data_br }}</td><td data-rotulo="Valor" class="num mono">{{ c.valor|brl }}</td>
+          <td data-rotulo="Situação">{% badge_obj c %}</td>
+          <td data-rotulo="Nota">{% if c.nota %}<a class="mono" href="{% url 'fiscal:nota_detalhe' c.nota.pk %}">{{ c.nota.numero_nfse|default:"rascunho" }}</a>{% else %}—{% endif %}</td>
+        </tr>{% empty %}<tr><td colspan="5" class="muted small">As competências aparecem até 60 dias antes da emissão.</td></tr>{% endfor %}
+      </tbody>
+    </table></div>
+  </div>
+  <section class="card">
+    <h3>{% icone "clock" 16 %} Próxima emissão</h3>
+    {% if proxima %}<p><strong>{{ proxima.emissao|data_br }}</strong> · competência {{ proxima.competencia|date:"m/Y" }}</p>{% else %}<p class="muted small">{% if agenda.ativo %}Sem emissões futuras.{% else %}Agenda pausada.{% endif %}</p>{% endif %}
+    <a class="btn" href="{% url 'faturamento:agenda' agenda.pk %}">Abrir agenda {% icone "chevron-right" 14 %}</a>
+  </section>
+</div>
+{% else %}
+<div class="card">
+  {% if contrato.status == "VIGENTE" %}
+  <div class="vazio">
+    <span style="display:inline-grid;place-items:center;width:64px;height:64px;border-radius:18px;background:var(--primary-50);color:var(--brand);margin-bottom:10px">{% icone "repeat" 30 %}</span>
+    <p>Este contrato ainda não tem faturamento recorrente.<br>Programe a emissão mensal da NFS-e em 4 passos.</p>
+    <a class="btn btn-primario btn-pill" href="{% url 'faturamento:agenda_nova' %}?contrato={{ contrato.pk }}">{% icone "plus" 16 %} Programar faturamento</a>
+  </div>
+  {% else %}{% empty_state "Faturamento recorrente disponível apenas para contratos vigentes." %}{% endif %}
+</div>
+{% endif %}

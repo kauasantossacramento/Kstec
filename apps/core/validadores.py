@@ -45,6 +45,12 @@ def validar_cpf_cnpj(valor: str):
     raise ValidationError("CPF/CNPJ inválido (dígito verificador não confere).")
 
 
+def validar_cpf_cnpj_opcional(valor: str):
+    """Aceita vazio (documento ainda não emitido); se informado, valida os dígitos."""
+    if so_digitos(valor):
+        validar_cpf_cnpj(valor)
+
+
 def validar_cnpj(valor: str):
     if not cnpj_valido(valor):
         raise ValidationError("CNPJ inválido.")
@@ -62,3 +68,28 @@ def formatar_doc(valor: str | None) -> str:
 def formatar_cep(valor: str | None) -> str:
     d = so_digitos(valor)
     return f"{d[:5]}-{d[5:]}" if len(d) == 8 else (valor or "")
+
+
+def normalizar_telefone(valor: str | None) -> str:
+    """Telefone brasileiro em dígitos E.164 (55 + DDD + número). Vazio se inválido."""
+    d = so_digitos(valor)
+    if d.startswith("00"):
+        d = d[2:]
+    if len(d) in (10, 11):
+        d = "55" + d
+    if not (d.startswith("55") and len(d) in (12, 13)):
+        return ""
+    return d
+
+
+def validar_telefone(valor: str):
+    if not normalizar_telefone(valor):
+        raise ValidationError("Informe DDD e número, por exemplo (75) 99999-0000.")
+
+
+def formatar_telefone(valor: str | None) -> str:
+    d = normalizar_telefone(valor)
+    if not d:
+        return valor or ""
+    ddd, numero = d[2:4], d[4:]
+    return f"({ddd}) {numero[:-4]}-{numero[-4:]}"

@@ -24,3 +24,4 @@ gunicorn==26.2.0
 whitenoise==6.12.0
 uuid6==2025.0.1
 pypdf==6.1.1
+neonize==0.5.2

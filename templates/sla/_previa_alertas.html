@@ -1,0 +1,11 @@
+{% if previas.erro %}<div class="alerta danger">{% icone "alert" 16 %}<div class="small">Texto com chaves inválidas: {{ previas.erro }}. Use apenas os campos listados.</div></div>{% else %}
+<div class="stack">
+  <div><span class="badge badge-danger"><span class="dot"></span>Queda</span>
+    <div class="bolha" style="max-width:none;margin-top:6px"><strong>{{ previas.queda.0 }}</strong>
+
+{{ previas.queda.1 }}</div></div>
+  <div><span class="badge badge-success"><span class="dot"></span>Retorno</span>
+    <div class="bolha" style="max-width:none;margin-top:6px"><strong>{{ previas.retorno.0 }}</strong>
+
+{{ previas.retorno.1 }}</div></div>
+</div>{% endif %}
