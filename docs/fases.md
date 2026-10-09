@@ -22,3 +22,12 @@ Registro do que foi entregue em cada fase do roteiro (plano, seção 13) e do qu
 - `cadastros`: Pessoa (cliente/órgão/fornecedor) + Contato; consulta automática de CNPJ (BrasilAPI) e CEP (ViaCEP); validação de dígitos.
 - `seed_inicial` cria a empresa KS TEC (CNPJ 62.501.281/0001-13, Valença/BA 2932903), papéis e parâmetros.
 - Logos em SVG provisórios (o PNG oficial não pôde ser baixado do ambiente de desenvolvimento) — ver `static/img/README.md`.
+
+## Fase 2 — Contratos e certidões ✅
+
+- `contratos`: Contrato, Aditivo, ItemContrato, Empenho, Competencia (geração automática pela vigência, inclusive aditivos de prazo; comando `gerar_competencias`).
+- Hub do contrato com abas `Resumo · Notas · Financeiro · Tarefas · Relatórios · Custos · Sistemas/SLA · Documentos · Histórico` (abas de módulos futuros exibem `empty_state`; cada app registra sua aba em `apps/contratos/abas.py`).
+- Indicadores: valor atualizado, faturado, saldo, % executado, dias para o fim; alertas de vigência (90/60/30) e saldo < 20% (task diária + notificação por e-mail).
+- Técnicos (papel Operação) só veem contratos em que estão alocados.
+- `certidoes`: TipoCertidao (seed com 10 tipos), Certidao com upload de PDF e extração de validade/código/situação, semáforo APTA/ATENÇÃO/INAPTA, alertas 30/15/7/0 dias, Kit de habilitação (ZIP + índice PDF; vencidas ficam fora com aviso).
+- Agenda de obrigações (`/agenda/`) e "Precisa da sua atenção" no painel, alimentados por provedores registrados por cada app (`apps/core/agenda.py`).
