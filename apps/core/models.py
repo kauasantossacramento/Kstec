@@ -492,3 +492,25 @@ class LogAcesso(ModeloSimples):
         verbose_name = "log de acesso"
         verbose_name_plural = "logs de acesso"
         ordering = ["-criado_em"]
+
+
+class Contador(models.Model):
+    """Sequências simples por empresa (ex.: ORC-2026). Incremento com select_for_update."""
+
+    empresa = models.ForeignKey(Empresa, on_delete=models.CASCADE, related_name="+")
+    chave = models.CharField(max_length=60)
+    valor = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        constraints = [models.UniqueConstraint(fields=["empresa", "chave"], name="contador_unico")]
+
+    @classmethod
+    def proximo(cls, chave: str, empresa=None) -> int:
+        from django.db import transaction
+
+        empresa = empresa or contexto.empresa_atual()
+        with transaction.atomic():
+            obj, _ = cls.objects.select_for_update().get_or_create(empresa=empresa, chave=chave)
+            obj.valor += 1
+            obj.save(update_fields=["valor"])
+            return obj.valor

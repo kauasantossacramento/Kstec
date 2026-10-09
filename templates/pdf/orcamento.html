@@ -1,0 +1,14 @@
+{% extends "pdf/_base.html" %}
+{% block titulo_cab %}Orçamento {{ o.numero }}{% endblock %}
+{% block sub_cab %}Emissão {{ o.data|data_br }} · Validade {{ o.validade|data_br }}{% endblock %}
+{% block conteudo %}
+<div class="caixa"><strong>Cliente:</strong> {{ o.nome_cliente }}{% if o.cliente %} · {{ o.cliente.doc_formatado }}{% elif o.cliente_avulso_doc %} · {{ o.cliente_avulso_doc|doc }}{% endif %}</div>
+<table><thead><tr><th>#</th><th>Descrição</th><th class="num">Qtd.</th><th class="num">Unitário</th><th class="num">Total</th></tr></thead>
+<tbody>{% for i in itens %}<tr><td>{{ forloop.counter }}</td><td><strong>{{ i.descricao }}</strong>{% if i.variacoes_texto %}<br><span class="muted">{{ i.variacoes_texto }}</span>{% endif %}</td><td class="num">{{ i.quantidade|numero:0 }}</td><td class="num">{{ i.preco_unitario|numero:4 }}</td><td class="num">{{ i.total|brl }}</td></tr>{% endfor %}</tbody>
+<tfoot><tr><td colspan="4">Subtotal</td><td class="num">{{ o.subtotal|brl }}</td></tr>{% if o.desconto_valor %}<tr><td colspan="4">Desconto</td><td class="num">−{{ o.valor_desconto|brl }}</td></tr>{% endif %}<tr><td colspan="4">Total</td><td class="num">{{ o.total|brl }}</td></tr></tfoot></table>
+<h2>Condições</h2>
+<p><strong>Pagamento:</strong> {{ o.condicoes_pagamento|default:"—" }}<br><strong>Prazo de entrega:</strong> {{ o.prazo_entrega|default:"—" }}</p>
+{% if o.observacoes %}<p>{{ o.observacoes|linebreaksbr }}</p>{% endif %}
+<div class="caixa">Aprove online: <span class="mono">{{ link }}</span></div>
+<p class="muted">{{ empresa.razao_social }} · CNPJ {{ empresa.cnpj_formatado }} · {{ empresa.email }} · {{ empresa.site }}</p>
+{% endblock %}

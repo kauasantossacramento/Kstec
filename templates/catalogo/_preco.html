@@ -1,0 +1,8 @@
+<div id="preco-ao-vivo" class="caixa-preco">
+  <table class="tabela"><tbody>
+    {% for d in calc.detalhes %}<tr><td>{{ d.rotulo }}</td><td class="num mono">{% if d.tipo == "PERCENTUAL" %}+{{ d.valor|numero }}%{% elif d.tipo == "FIXO" %}+{{ d.valor|brl }} (fixo){% elif d.tipo %}+{{ d.valor|numero:4 }}/un{% else %}{{ d.valor|numero:4 }}{% endif %}</td></tr>{% endfor %}
+  </tbody><tfoot>
+    <tr><td>Unitário</td><td class="num mono">{{ calc.unitario|numero:4 }}</td></tr>
+    <tr><td>Total ({{ quantidade|numero:0 }})</td><td class="num mono">{{ calc.total|brl }}</td></tr>
+  </tfoot></table>
+</div>

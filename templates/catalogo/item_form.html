@@ -1,0 +1,11 @@
+{% extends "crud/form.html" %}
+{% block campos %}
+<div class="form-grid">
+  {% for campo in form %}
+    {% if campo.name == "item_lc116" %}<div class="secao-form">Códigos fiscais (validar com o contador)</div>{% endif %}
+    {% if campo.name == "ncm" %}<div class="secao-form">Outros</div>{% endif %}
+    {% include "components/campo.html" %}
+  {% endfor %}
+</div>
+<p class="small muted" style="margin-top:12px">Impressos personalizados sob encomenda tendem a ser serviço (ISS, item 13.05). Mercadoria pronta/revenda é ICMS e exige NF-e estadual — marque como Produto.</p>
+{% endblock %}

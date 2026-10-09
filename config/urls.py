@@ -15,6 +15,9 @@ urlpatterns = [
     path("cadastros/", include("apps.cadastros.urls")),
     path("contratos/", include("apps.contratos.urls")),
     path("certidoes/", include("apps.certidoes.urls")),
+    path("catalogo/", include("apps.catalogo.urls")),
+    path("comercial/", include("apps.comercial.urls")),
+    path("o/", include(("apps.comercial.urls_publico", "comercial_publico"))),
     path("", include("apps.painel.urls")),
 ]
 if settings.DEBUG:

@@ -1,0 +1,48 @@
+{% extends "base_publica.html" %}{% load static %}
+{% block titulo %}Orçamento {{ o.numero }}{% endblock %}
+{% block corpo %}
+<div style="max-width:880px;margin:0 auto;padding:24px 16px 60px">
+  <header class="linha entre" style="margin-bottom:20px">
+    <img src="{% static 'img/ks-tec-logo.svg' %}" alt="KS TEC" style="height:46px">
+    <div style="text-align:right"><div class="muted small">Orçamento</div><div class="mono" style="font-size:20px;font-weight:600">{{ o.numero }}</div></div>
+  </header>
+  {% if erro %}<div class="alerta danger" role="alert">{% icone "alert" 18 %} {{ erro }}</div>{% endif %}
+  {% if o.status == "APROVADO" or o.status == "CONVERTIDO" %}<div class="alerta success">{% icone "check" 18 %} Orçamento aprovado por {{ o.aprovado_por_nome }} em {{ o.aprovado_em|data_br }}. Obrigado! Entraremos em contato.</div>
+  {% elif o.status == "EXPIRADO" or o.expirado %}<div class="alerta warning">{% icone "alert" 18 %} Este orçamento expirou em {{ o.validade|data_br }}. Fale conosco para atualizá-lo.</div>
+  {% elif o.status == "RECUSADO" %}<div class="alerta">{% icone "info" 18 %} Este orçamento foi encerrado.</div>{% endif %}
+  {% if ajuste_enviado %}<div class="alerta success">{% icone "check" 18 %} Sua solicitação de ajuste foi enviada. Retornaremos em breve.</div>{% endif %}
+  <section class="card">
+    <div class="grid g-2">
+      <div><div class="muted small">Para</div><strong>{{ o.nome_cliente }}</strong></div>
+      <div style="text-align:right"><div class="muted small">Emissão · Validade</div>{{ o.data|data_br }} · <strong>{{ o.validade|data_br }}</strong></div>
+    </div>
+    <div class="tabela-wrap responsiva" style="margin-top:16px"><table class="tabela">
+      <thead><tr><th>Descrição</th><th class="num">Qtd.</th><th class="num">Unitário</th><th class="num">Total</th></tr></thead>
+      <tbody>{% for i in itens %}<tr><td data-rotulo="Descrição"><strong>{{ i.descricao }}</strong>{% if i.variacoes_texto %}<div class="small muted">{{ i.variacoes_texto }}</div>{% endif %}</td><td data-rotulo="Qtd." class="num mono">{{ i.quantidade|numero:0 }}</td><td data-rotulo="Unitário" class="num mono">{{ i.preco_unitario|numero:4 }}</td><td data-rotulo="Total" class="num mono">{{ i.total|brl }}</td></tr>{% endfor %}</tbody>
+      <tfoot>{% if o.desconto_valor %}<tr><td colspan="3">Desconto</td><td class="num mono">−{{ o.valor_desconto|brl }}</td></tr>{% endif %}<tr><td colspan="3">Total</td><td class="num mono" style="font-size:18px">{{ o.total|brl }}</td></tr></tfoot>
+    </table></div>
+    <dl class="defs" style="margin-top:16px">
+      <div><dt>Pagamento</dt><dd>{{ o.condicoes_pagamento|default:"—" }}</dd></div>
+      <div><dt>Prazo de entrega</dt><dd>{{ o.prazo_entrega|default:"—" }}</dd></div>
+      {% if o.observacoes %}<div style="grid-column:1/-1"><dt>Observações</dt><dd>{{ o.observacoes|linebreaksbr }}</dd></div>{% endif %}
+    </dl>
+  </section>
+  {% if o.status == "ENVIADO" or o.status == "VISUALIZADO" %}{% if not o.expirado %}
+  <div class="grid g-2" style="margin-top:16px">
+    <form method="post" class="card stack">{% csrf_token %}<input type="hidden" name="acao" value="aprovar">
+      <h3>Aprovar orçamento</h3>
+      <div class="campo"><label for="nome-aprov">Seu nome completo</label><input class="input" id="nome-aprov" name="nome" required minlength="3" autocomplete="name"></div>
+      <button class="btn btn-primario btn-pill" type="submit">{% icone "check" 16 %} Aprovar</button>
+      <p class="xs muted">Registramos data, hora e IP da aprovação.</p>
+    </form>
+    <form method="post" class="card stack">{% csrf_token %}<input type="hidden" name="acao" value="ajuste">
+      <h3>Solicitar ajuste</h3>
+      <div class="campo"><label for="nome-aj">Seu nome</label><input class="input" id="nome-aj" name="nome" autocomplete="name"></div>
+      <div class="campo"><label for="texto-aj">O que precisa mudar?</label><textarea class="input" id="texto-aj" name="texto" rows="3" required></textarea></div>
+      <button class="btn btn-pill" type="submit">{% icone "send" 16 %} Enviar solicitação</button>
+    </form>
+  </div>
+  {% endif %}{% endif %}
+  <p class="xs muted" style="text-align:center;margin-top:24px">{{ empresa.razao_social }} · CNPJ {{ empresa.cnpj_formatado }} · {{ empresa.site }}</p>
+</div>
+{% endblock %}

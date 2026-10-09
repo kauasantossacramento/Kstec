@@ -1,0 +1,12 @@
+{% extends "crud/form.html" %}
+{% block form_topo %}{% include "comercial/_stepper.html" with passo=1 %}{% endblock %}
+{% block campos %}
+{% if form.non_field_errors %}<div class="alerta danger">{% for e in form.non_field_errors %}{{ e }}{% endfor %}</div>{% endif %}
+<div class="form-grid">
+{% for campo in form %}
+  {% if campo.name == "cliente_avulso_nome" %}<div class="secao-form">Ou cliente avulso</div>{% endif %}
+  {% if campo.name == "data" %}<div class="secao-form">Condições</div>{% endif %}
+  {% include "components/campo.html" %}
+{% endfor %}
+</div>
+{% endblock %}

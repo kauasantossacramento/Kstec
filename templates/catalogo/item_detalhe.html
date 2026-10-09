@@ -1,0 +1,26 @@
+{% extends "crud/detalhe.html" %}
+{% block acoes_extra %}<a class="btn" href="{% url 'catalogo:tabelas' %}">{% icone "search" 16 %} Tabelas fiscais</a>{% endblock %}
+{% block principal %}
+{% if obj.pendencias_fiscais %}<div class="alerta warning">{% icone "alert" 18 %}<div><strong>Pendências para emitir NFS-e:</strong><ul style="margin:4px 0 0">{% for p in obj.pendencias_fiscais %}<li>{{ p }}</li>{% endfor %}</ul></div></div>{% else %}<div class="alerta success">{% icone "check" 18 %} Códigos fiscais completos: item apto para NFS-e.</div>{% endif %}
+{{ block.super }}
+{% endblock %}
+{% block extra %}
+<section class="card">
+  <div class="card-cab"><h3>Configurador de preço</h3></div>
+  <form class="form-grid" hx-get="{% url 'catalogo:preco' obj.pk %}" hx-target="#preco-ao-vivo" hx-swap="outerHTML" hx-trigger="change, input delay:300ms">
+    <div class="campo"><label for="qtd">Quantidade</label><input id="qtd" class="input mono" name="quantidade" value="{% if faixas %}500{% else %}1{% endif %}" inputmode="decimal"></div>
+    <div class="campo"><label>Variações</label>
+      {% for v in variacoes %}<label class="small" style="display:flex;gap:8px;align-items:center"><input class="checkbox" type="checkbox" name="variacoes" value="{{ v.pk }}"> {{ v }} <span class="muted">({{ v.get_acrescimo_tipo_display|lower }}: {{ v.acrescimo_valor|numero:2 }})</span></label>{% empty %}<span class="muted small">Sem variações.</span>{% endfor %}
+    </div>
+  </form>
+  {% include "catalogo/_preco.html" with calc=simulacao quantidade=simulacao_qtd|default:500 %}
+</section>
+<section class="card">
+  <div class="card-cab"><h3>Faixas de preço</h3>{% if pode_escrever %}<a class="btn btn-sm" href="{% url 'catalogo:faixa_nova' %}?item={{ obj.pk }}&voltar={{ request.path }}">{% icone "plus" 14 %} Faixa</a>{% endif %}</div>
+  {% for f in faixas %}<div class="linha entre small" style="padding:6px 0;border-bottom:1px solid var(--line)"><a href="{% url 'catalogo:faixa_detalhe' f.pk %}">{{ f.quantidade_min }}{% if f.quantidade_max %}–{{ f.quantidade_max }}{% else %}+{% endif %} {{ obj.get_unidade_display|lower }}</a><span class="mono">{{ f.preco_unitario|numero:4 }}</span></div>{% empty %}<p class="muted small">Sem faixas: usa o preço base.</p>{% endfor %}
+</section>
+<section class="card">
+  <div class="card-cab"><h3>Variações gráficas</h3>{% if pode_escrever %}<a class="btn btn-sm" href="{% url 'catalogo:variacao_nova' %}?item={{ obj.pk }}&voltar={{ request.path }}">{% icone "plus" 14 %} Variação</a>{% endif %}</div>
+  {% for v in variacoes %}<div class="linha entre small" style="padding:6px 0;border-bottom:1px solid var(--line)"><a href="{% url 'catalogo:variacao_detalhe' v.pk %}">{{ v }}</a><span class="muted">{{ v.get_acrescimo_tipo_display }} · <span class="mono">{{ v.acrescimo_valor|numero:2 }}</span></span></div>{% empty %}<p class="muted small">Nenhuma variação.</p>{% endfor %}
+</section>
+{% endblock %}

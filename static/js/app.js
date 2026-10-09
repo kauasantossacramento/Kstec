@@ -204,6 +204,26 @@
     }
   });
 
+  /* ---------------- Sugestões dependentes (ex.: LC 116 → NBS/cTribNac) ---------------- */
+  document.addEventListener("change", (e) => {
+    const sel = e.target;
+    if (!sel.matches || !sel.matches("[data-sugestoes-url]") || !sel.value) return;
+    fetch(sel.dataset.sugestoesUrl + "?valor=" + encodeURIComponent(sel.value)).then((r) => r.json()).then((d) => {
+      Object.entries(d).forEach(([campo, opcoes]) => {
+        const alvo = sel.form.querySelector(`[name="${campo}"]`);
+        if (!alvo || !opcoes.length) return;
+        const atual = alvo.value;
+        const grupo = document.createElement("optgroup"); grupo.label = "Sugeridos para este item";
+        opcoes.forEach((o) => { const op = document.createElement("option"); op.value = o.id; op.textContent = o.rotulo; grupo.appendChild(op); });
+        alvo.querySelectorAll("optgroup[data-sugestao]").forEach((g) => g.remove());
+        grupo.dataset.sugestao = "1";
+        alvo.insertBefore(grupo, alvo.options[1] || null);
+        if (!atual) alvo.value = opcoes[0].id;
+      });
+      toast("Códigos fiscais sugeridos a partir do item da LC 116.", "info");
+    });
+  });
+
   /* ---------------- Gráficos (Chart.js) ---------------- */
   function desenharGraficos(raizEl) {
     if (!window.Chart) return;

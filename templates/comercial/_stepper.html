@@ -1,0 +1,6 @@
+<div class="stepper" aria-label="Etapas do orçamento">
+  <div class="passo {% if passo > 1 %}feito{% else %}ativo{% endif %}">Cliente</div>
+  <div class="passo {% if passo > 2 %}feito{% elif passo == 2 %}ativo{% endif %}">Itens</div>
+  <div class="passo {% if passo > 3 %}feito{% elif passo == 3 %}ativo{% endif %}">Condições</div>
+  <div class="passo {% if passo == 4 %}ativo{% endif %}">Revisão e envio</div>
+</div>

@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block titulo %}Tabelas fiscais{% endblock %}
+{% block breadcrumb %}{% icone "chevron-right" 14 %}<a href="{% url 'catalogo:item_lista' %}">Catálogo</a>{% icone "chevron-right" 14 %}<span class="atual">Tabelas fiscais</span>{% endblock %}
+{% block h1 %}Tabelas fiscais de referência{% endblock %}
+{% block subtitulo %}<p class="sub">LC 116, cTribNac, NBS e correlação IBS/CBS. Atualize com <code>manage.py importar_tabelas_fiscais</code>.</p>{% endblock %}
+{% block conteudo %}
+<form class="filtros" method="get"><input class="input busca" type="search" name="q" value="{{ q }}" placeholder='Buscar NBS por texto (ex.: "hospedagem", "suporte")' aria-label="Buscar NBS"><button class="btn">Buscar</button></form>
+<div class="grid g-2">
+  <section class="card"><h3>NBS</h3>
+    <table class="tabela"><thead><tr><th>Código</th><th>Descrição</th></tr></thead><tbody>
+    {% for n in nbs %}<tr><td class="mono">{{ n.codigo_mascarado }}</td><td>{{ n.descricao }}</td></tr>{% empty %}<tr><td colspan="2" class="muted">Nada encontrado.</td></tr>{% endfor %}
+    </tbody></table></section>
+  <section class="card"><h3>Itens da LC 116</h3>
+    <table class="tabela"><thead><tr><th>Item</th><th>Descrição</th></tr></thead><tbody>
+    {% for i in lc %}<tr><td class="mono">{{ i.item }}</td><td>{{ i.descricao|truncatechars:140 }}</td></tr>{% endfor %}
+    </tbody></table></section>
+</div>
+{% endblock %}

@@ -31,3 +31,10 @@ Registro do que foi entregue em cada fase do roteiro (plano, seção 13) e do qu
 - Técnicos (papel Operação) só veem contratos em que estão alocados.
 - `certidoes`: TipoCertidao (seed com 10 tipos), Certidao com upload de PDF e extração de validade/código/situação, semáforo APTA/ATENÇÃO/INAPTA, alertas 30/15/7/0 dias, Kit de habilitação (ZIP + índice PDF; vencidas ficam fora com aviso).
 - Agenda de obrigações (`/agenda/`) e "Precisa da sua atenção" no painel, alimentados por provedores registrados por cada app (`apps/core/agenda.py`).
+
+## Fase 3 — Catálogo, tabelas fiscais e orçamentos ✅
+
+- Tabelas de referência: `CodigoServicoLC116`, `CodigoTributacaoNacional`, `CodigoNBS`, `CorrelacaoNBS` (IBS/CBS). Comando `importar_tabelas_fiscais <xlsx...>` reconhece as abas `LISTA.SERV.NAC.`, `LISTA.NBS_v2.0` e `tabela geral` por palavras-chave, com *forward-fill* do item LC 116 mesclado. O seed traz um conjunto mínimo (descrições de NBS marcadas como provisórias).
+- `ItemCatalogo` com códigos fiscais, sugestão automática de NBS/cTribNac ao escolher o item da LC 116, validação "apto para NFS-e" e bloqueio de produto (requer NF-e estadual).
+- Configurador gráfico: faixas de preço por quantidade + variações (por unidade, percentual, fixo rateado). Ex.: 500 cartões couché 300g + verniz + faca especial = R$ 0,82/un, R$ 410,00.
+- Orçamentos: numeração `ORC-AAAA-NNNN`, etapas Cliente → Itens (preço ao vivo via HTMX) → Condições → Revisão/envio, PDF com identidade visual, envio por e-mail/WhatsApp, link público `/o/<token>/` com Aprovar (nome + IP + data) e Solicitar ajuste, expiração automática, follow-up após 3 dias, conversão em venda com um clique.

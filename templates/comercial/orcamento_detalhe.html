@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+{% block titulo %}{{ obj.numero }}{% endblock %}
+{% block breadcrumb %}{% icone "chevron-right" 14 %}<a href="{{ url_lista }}">Orçamentos</a>{% icone "chevron-right" 14 %}<span class="atual">{{ obj.numero }}</span>{% endblock %}
+{% block h1 %}Orçamento {{ obj.numero }}{% endblock %}
+{% block subtitulo %}<p class="sub">{{ obj.nome_cliente }} · válido até {{ obj.validade|data_br }} · {% badge_obj obj %}</p>{% endblock %}
+{% block acoes %}
+<form method="post" action="{% url 'comercial:pdf' obj.pk %}">{% csrf_token %}<button class="btn" type="submit">{% icone "download" 16 %} PDF</button></form>
+{% if pode_escrever %}
+  {% if obj.editavel %}<a class="btn" href="{{ url_editar }}">{% icone "edit" 16 %} Cliente e condições</a>{% endif %}
+  {% if obj.status == "APROVADO" %}<form method="post" action="{% url 'comercial:converter' obj.pk %}">{% csrf_token %}<button class="btn btn-primario btn-pill" type="submit">{% icone "check" 16 %} Converter em venda</button></form>{% endif %}
+{% endif %}
+{% endblock %}
+{% block conteudo %}
+{% include "comercial/_stepper.html" %}
+{% if obj.ajuste_solicitado %}<div class="alerta warning">{% icone "alert" 18 %}<div><strong>Ajuste solicitado pelo cliente</strong><div class="small" style="white-space:pre-wrap">{{ obj.ajuste_solicitado }}</div></div></div>{% endif %}
+{% if obj.status == "APROVADO" or obj.status == "CONVERTIDO" %}<div class="alerta success">{% icone "check" 18 %} Aprovado por <strong>{{ obj.aprovado_por_nome }}</strong> em {{ obj.aprovado_em|data_br }} (IP {{ obj.ip_aprovacao }}).{% if obj.venda %} Venda: <a href="{% url 'comercial:venda_detalhe' obj.venda.pk %}">{{ obj.venda.numero }}</a>{% endif %}</div>{% endif %}
+<div class="grid g-2-1">
+  <div class="stack">
+    <section class="card">
+      <div class="card-cab"><h3>Itens</h3></div>
+      {% if itens %}
+      <div class="tabela-wrap responsiva"><table class="tabela">
+        <thead><tr><th>Descrição</th><th class="num">Qtd.</th><th class="num">Unitário</th><th class="num">Total</th><th></th></tr></thead>
+        <tbody>{% for i in itens %}<tr>
+          <td data-rotulo="Descrição"><strong>{{ i.descricao }}</strong>{% if i.variacoes_texto %}<div class="small muted">{{ i.variacoes_texto }}</div>{% endif %}</td>
+          <td data-rotulo="Qtd." class="num mono">{{ i.quantidade|numero:0 }}</td><td data-rotulo="Unitário" class="num mono">{{ i.preco_unitario|numero:4 }}</td><td data-rotulo="Total" class="num mono">{{ i.total|brl }}</td>
+          <td>{% if pode_escrever and obj.editavel %}<form method="post" action="{% url 'comercial:item_remover' obj.pk i.pk %}">{% csrf_token %}<button class="btn btn-sm btn-fantasma" aria-label="Remover item">{% icone "trash" 14 %}</button></form>{% endif %}</td>
+        </tr>{% endfor %}</tbody>
+        <tfoot>
+          <tr><td colspan="3">Subtotal</td><td class="num mono">{{ obj.subtotal|brl }}</td><td></td></tr>
+          {% if obj.desconto_valor %}<tr><td colspan="3">Desconto</td><td class="num mono">−{{ obj.valor_desconto|brl }}</td><td></td></tr>{% endif %}
+          <tr><td colspan="3">Total</td><td class="num mono">{{ obj.total|brl }}</td><td></td></tr>
+        </tfoot>
+      </table></div>
+      {% else %}{% empty_state "Adicione os itens do orçamento abaixo." %}{% endif %}
+    </section>
+    {% if pode_escrever and obj.editavel %}
+    <section class="card">
+      <h3>Adicionar item</h3>
+      <form method="post" action="{% url 'comercial:item_adicionar' obj.pk %}" class="form-grid"
+            hx-get="{% url 'comercial:preco' %}" hx-target="#preco-ao-vivo" hx-swap="outerHTML" hx-trigger="change delay:150ms, input delay:400ms from:input[name=quantidade]">
+        {% csrf_token %}
+        <div class="campo"><label for="id_item_catalogo">Item do catálogo</label>
+          <select class="input select" id="id_item_catalogo" name="item_catalogo" hx-get="{% url 'comercial:variacoes' %}" hx-target="#variacoes" hx-swap="outerHTML" hx-trigger="change">
+            <option value="">— item livre —</option>
+            {% for c in catalogo %}<option value="{{ c.pk }}">{{ c.nome }} ({{ c.get_unidade_display|lower }})</option>{% endfor %}
+          </select></div>
+        <div class="campo"><label for="id_quantidade">Quantidade</label><input class="input mono" id="id_quantidade" name="quantidade" value="1" inputmode="decimal"></div>
+        <div id="variacoes" class="campo inteiro"></div>
+        <div class="campo"><label for="id_descricao">Descrição (opcional)</label><input class="input" id="id_descricao" name="descricao" maxlength="500"></div>
+        <div class="campo"><label for="id_preco_unitario">Preço unitário</label><input class="input mono num" id="id_preco_unitario" name="preco_unitario" data-mask="money" inputmode="decimal" placeholder="calculado"><span class="ajuda">Em branco: faixa de quantidade + variações.</span></div>
+        <div class="inteiro">{% include "catalogo/_preco.html" with calc=None quantidade=0 %}</div>
+        <div class="inteiro form-acoes" style="margin-top:0"><button class="btn btn-primario" type="submit">{% icone "plus" 16 %} Adicionar</button></div>
+      </form>
+    </section>
+    {% endif %}
+  </div>
+  <aside class="stack">
+    <section class="card">
+      <h3>Condições</h3>
+      <dl class="defs" style="grid-template-columns:1fr">
+        <div><dt>Pagamento</dt><dd>{{ obj.condicoes_pagamento|default:"—" }}</dd></div>
+        <div><dt>Prazo de entrega</dt><dd>{{ obj.prazo_entrega|default:"—" }}</dd></div>
+        <div><dt>Observações</dt><dd>{{ obj.observacoes|default:"—"|linebreaksbr }}</dd></div>
+      </dl>
+    </section>
+    <section class="card">
+      <h3>Envio ao cliente</h3>
+      {% if obj.status == "RASCUNHO" or obj.status == "ENVIADO" or obj.status == "VISUALIZADO" %}
+      {% if pode_escrever %}
+      <form method="post" action="{% url 'comercial:enviar' obj.pk %}" class="stack">{% csrf_token %}
+        <div class="campo"><label for="email-envio">E-mail</label><input class="input" id="email-envio" type="email" name="email" value="{{ obj.email_cliente }}" placeholder="cliente@exemplo.com"></div>
+        <button class="btn btn-primario btn-pill" type="submit" {% if not itens %}disabled{% endif %}>{% icone "send" 16 %} {% if obj.enviado_em %}Reenviar{% else %}Enviar{% endif %}</button>
+      </form>
+      {% endif %}
+      {% endif %}
+      {% if obj.enviado_em %}
+      <p class="small muted" style="margin-top:12px">Enviado em {{ obj.enviado_em|data_br }}{% if obj.visualizado_em %} · visualizado em {{ obj.visualizado_em|data_br }}{% endif %}</p>
+      <div class="linha"><button class="btn btn-sm" type="button" data-copiar="{{ link }}">{% icone "link" 14 %} Copiar link</button>
+        <a class="btn btn-sm" target="_blank" rel="noopener" href="https://wa.me/?text={{ "Olá! Segue o orçamento "|urlencode }}{{ obj.numero|urlencode }}{{ ": "|urlencode }}{{ link|urlencode }}">WhatsApp</a>
+        {% if pode_escrever and obj.status != "RECUSADO" %}<form method="post" action="{% url 'comercial:recusado' obj.pk %}">{% csrf_token %}<button class="btn btn-sm btn-fantasma" type="submit">Marcar recusado</button></form>{% endif %}</div>
+      {% endif %}
+    </section>
+    <section class="card"><h3>Histórico</h3>{% include "components/timeline.html" with eventos=historico %}</section>
+  </aside>
+</div>
+{% endblock %}

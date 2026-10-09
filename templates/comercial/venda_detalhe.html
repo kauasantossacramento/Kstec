@@ -1,0 +1,11 @@
+{% extends "crud/detalhe.html" %}
+{% block acoes_extra %}{% for a in acoes_venda %}<form method="post" action="{{ a.href }}">{% csrf_token %}<button class="btn {% if a.primario %}btn-primario btn-pill{% endif %}" type="submit">{{ a.rotulo }}</button></form>{% endfor %}{% endblock %}
+{% block extra %}
+<section class="card">
+  <h3>Itens</h3>
+  <table class="tabela"><thead><tr><th>Descrição</th><th>Natureza</th><th class="num">Qtd.</th><th class="num">Total</th></tr></thead><tbody>
+  {% for i in itens %}<tr><td>{{ i.descricao }}</td><td>{% if i.item_catalogo %}{{ i.item_catalogo.get_natureza_display }}{% if i.item_catalogo.natureza == "PRODUTO" %} <span class="badge badge-warning">requer NF-e</span>{% endif %}{% else %}—{% endif %}</td><td class="num mono">{{ i.quantidade|numero:0 }}</td><td class="num mono">{{ i.total|brl }}</td></tr>{% endfor %}
+  </tbody><tfoot><tr><td colspan="3">Total</td><td class="num mono">{{ obj.total|brl }}</td></tr></tfoot></table>
+  {% if obj.orcamento %}<p class="small muted" style="margin-top:8px">Origem: <a href="{% url 'comercial:orcamento_detalhe' obj.orcamento.pk %}">{{ obj.orcamento.numero }}</a></p>{% endif %}
+</section>
+{% endblock %}

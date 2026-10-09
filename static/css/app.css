@@ -322,3 +322,5 @@ table.tabela { width: 100%; border-collapse: collapse; font-size: var(--fs-base)
   .card { box-shadow: none; }
 }
 .grid > .card + .card, .linha > .card + .card { margin-top: 0; }
+.tabela td.num, .tabela tfoot td.num { white-space: nowrap; }
+@media (max-width: 767px) { .responsiva .tabela tfoot { display: table; width: 100%; } .responsiva .tabela tfoot tr { display: table-row; } .responsiva .tabela tfoot td { display: table-cell; } }

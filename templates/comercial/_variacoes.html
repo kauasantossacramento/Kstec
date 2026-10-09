@@ -1,0 +1,9 @@
+<div id="variacoes" class="campo inteiro">
+{% if item %}
+  {% regroup item.variacoes.all by get_atributo_display as grupos %}
+  {% for g in grupos %}<fieldset style="border:1px solid var(--line);border-radius:10px;padding:8px 12px;margin:0 0 8px"><legend class="small muted">{{ g.grouper }}</legend>
+    {% for v in g.list %}<label class="small" style="display:inline-flex;gap:6px;align-items:center;margin-right:14px"><input class="checkbox" type="checkbox" name="variacoes" value="{{ v.pk }}"> {{ v.opcao }}</label>{% endfor %}
+  </fieldset>{% endfor %}
+  {% if item.pendencias_fiscais %}<p class="small erro-texto">{% for p in item.pendencias_fiscais %}{{ p }} {% endfor %}</p>{% endif %}
+{% endif %}
+</div>
