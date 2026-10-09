@@ -1,0 +1,2 @@
+{% extends "crud/lista.html" %}
+{% block acoes_extra %}<a class="btn" href="{% url 'fiscal:configuracao' %}">Configuração fiscal</a><a class="btn" href="{% url 'catalogo:tabelas' %}">Serviços e NBS</a><a class="btn" href="{% url 'fiscal:perfil_lista' %}">Perfis fiscais</a>{% endblock %}

@@ -1,0 +1,1 @@
+<section class="card"><h3>Notas do contrato</h3>{% for nota in notas %}<p><a href="{% url 'fiscal:nota_detalhe' nota.pk %}">{{ nota }}</a> · {{ nota.valor_servicos|brl }} · {{ nota.get_status_display }}</p>{% empty %}<p class="muted">Nenhuma nota vinculada.</p>{% endfor %}</section>

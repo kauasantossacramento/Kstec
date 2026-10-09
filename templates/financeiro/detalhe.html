@@ -1,0 +1,3 @@
+{% extends "crud/detalhe.html" %}
+{% block acoes_extra %}{% if pode_escrever and baixavel %}<a class="btn btn-primario" href="{% url 'financeiro:baixar' obj.pk %}">Registrar baixa</a>{% endif %}{% endblock %}
+{% block extra %}{% if pode_escrever and baixavel %}<section class="card"><h3>Cancelar lançamento</h3><form method="post" action="{% url 'financeiro:cancelar' obj.pk %}" class="stack">{% csrf_token %}<label for="motivo">Motivo</label><input class="input" id="motivo" name="motivo" maxlength="300" required><button class="btn" type="submit">Cancelar lançamento</button></form></section>{% endif %}{% endblock %}

@@ -1,10 +1,15 @@
 # Identidade visual
 
-Os SVGs desta pasta são **provisórios** (hexágono com "KS" na cor da marca `#0016E1`), gerados porque o
-ambiente de desenvolvimento não tinha acesso a `https://kstec.online/assets/ks-tec-logo.png`.
+`ks-tec-logo.png` é a logo oficial baixada de
+https://kstec.online/assets/ks-tec-logo.png (1284 × 394, PNG transparente).
 
-Para usar a logo oficial:
-1. Baixe `ks-tec-logo.png` do site e salve aqui.
-2. Gere a versão branca (para a sidebar navy) e o símbolo isolado em SVG a partir do arquivo oficial,
-   mantendo os nomes `ks-tec-logo-branca.svg`, `ks-tec-simbolo.svg`, `ks-tec-simbolo-branco.svg` e `favicon.svg`.
-3. Faça o deploy (o `collectstatic` roda no build da imagem).
+Os SVGs incorporam esse PNG original, sem redesenhar a marca:
+
+- `ks-tec-logo.svg`: logo completa em azul.
+- `ks-tec-logo-branca.svg`: logo completa com filtro SVG branco para fundos navy.
+- `ks-tec-simbolo.svg` e `ks-tec-simbolo-branco.svg`: símbolo isolado por viewport SVG.
+- `favicon.svg`: símbolo oficial em azul.
+
+Sidebar e login usam a versão branca; orçamento público e PDFs usam o PNG azul.
+Os arquivos são locais, sem depender do site externo durante o uso.
+O deploy deve executar `collectstatic`, como previsto no build da imagem.

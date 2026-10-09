@@ -1,0 +1,6 @@
+{% extends "crud/detalhe.html" %}
+{% block extra %}
+{% if pode_escrever %}<section class="card"><h3>Mudar situação</h3><form method="post" action="{% url 'operacao:status' obj.pk %}" class="linha" style="gap:12px">{% csrf_token %}<select class="input" name="status" aria-label="Nova situação">{% for valor, nome in transicoes %}<option value="{{ valor }}">{{ nome }}</option>{% endfor %}</select><button class="btn" type="submit">Atualizar</button></form></section>{% endif %}
+<section class="card"><h3>Apontamentos · {{ total_horas|numero }} h</h3>{% for a in apontamentos %}<div style="padding:12px 0;border-bottom:1px solid var(--line)"><strong>{{ a.data|data_br }} · {{ a.horas|numero }} h · {{ a.usuario }}</strong><p>{{ a.descricao|linebreaksbr }}</p></div>{% empty %}<p class="muted">Nenhuma hora registrada.</p>{% endfor %}
+{% if pode_escrever and aberta %}<form method="post" action="{% url 'operacao:apontar' obj.pk %}" class="stack" style="margin-top:16px">{% csrf_token %}{% include "components/form_campos.html" with form=form_horas %}<button class="btn btn-primario" type="submit">Registrar horas</button></form>{% endif %}</section>
+{% endblock %}

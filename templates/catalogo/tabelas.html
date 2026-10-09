@@ -2,17 +2,23 @@
 {% block titulo %}Tabelas fiscais{% endblock %}
 {% block breadcrumb %}{% icone "chevron-right" 14 %}<a href="{% url 'catalogo:item_lista' %}">Catálogo</a>{% icone "chevron-right" 14 %}<span class="atual">Tabelas fiscais</span>{% endblock %}
 {% block h1 %}Tabelas fiscais de referência{% endblock %}
-{% block subtitulo %}<p class="sub">LC 116, cTribNac, NBS e correlação IBS/CBS. Atualize com <code>manage.py importar_tabelas_fiscais</code>.</p>{% endblock %}
+{% block acoes %}<a class="btn" href="{% url 'catalogo:municipal_lista' %}">Confirmar códigos municipais</a>{% if request.user.is_superuser or "Administrador" in request.user.papeis %}<a class="btn btn-primary" href="{% url 'catalogo:importar_tabelas' %}">Importar tabelas</a>{% endif %}{% endblock %}
+{% block subtitulo %}<p class="sub">Consulte as descrições oficiais para classificar o serviço prestado. O código municipal deve corresponder ao cadastro da prefeitura.</p>{% endblock %}
 {% block conteudo %}
-<form class="filtros" method="get"><input class="input busca" type="search" name="q" value="{{ q }}" placeholder='Buscar NBS por texto (ex.: "hospedagem", "suporte")' aria-label="Buscar NBS"><button class="btn">Buscar</button></form>
+<form class="filtros" method="get"><input class="input busca" type="search" name="q" value="{{ q }}" placeholder='Buscar código ou descrição (ex.: "suporte")' aria-label="Buscar tabelas fiscais"><button class="btn">Buscar</button></form>
 <div class="grid g-2">
-  <section class="card"><h3>NBS</h3>
+  <section class="card"><h3>Serviços de {{ request.empresa.municipio_ibge }} ({{ municipal.paginator.count }})</h3><p class="muted small">A lista legal municipal e o código da API são referências distintas. Somente códigos confirmados podem ser transmitidos.</p><table class="tabela"><thead><tr><th>Item LC 116</th><th>Código da API</th><th>Descrição / fonte</th></tr></thead><tbody>{% for m in municipal %}<tr><td class="mono">{{ m.item_lc116 }}</td><td>{{ m.codigo_integracao|default:"Pendente" }}{% if m.codigo_confirmado %} ✓{% endif %}</td><td>{{ m.descricao|truncatechars:180 }}<br><a class="small" href="{{ m.fonte }}" target="_blank" rel="noopener">Fonte</a></td></tr>{% empty %}<tr><td colspan="3">Importe a tabela municipal.</td></tr>{% endfor %}</tbody></table>{% include "catalogo/_paginacao_fiscal.html" with pagina=municipal parametro="municipal_pagina" %}</section>
+  <section class="card"><h3>NBS ({{ nbs.paginator.count }})</h3>
     <table class="tabela"><thead><tr><th>Código</th><th>Descrição</th></tr></thead><tbody>
     {% for n in nbs %}<tr><td class="mono">{{ n.codigo_mascarado }}</td><td>{{ n.descricao }}</td></tr>{% empty %}<tr><td colspan="2" class="muted">Nada encontrado.</td></tr>{% endfor %}
-    </tbody></table></section>
-  <section class="card"><h3>Itens da LC 116</h3>
+    </tbody></table>{% include "catalogo/_paginacao_fiscal.html" with pagina=nbs parametro="nbs_pagina" %}</section>
+  <section class="card"><h3>Itens da LC 116 ({{ lc.paginator.count }})</h3>
     <table class="tabela"><thead><tr><th>Item</th><th>Descrição</th></tr></thead><tbody>
     {% for i in lc %}<tr><td class="mono">{{ i.item }}</td><td>{{ i.descricao|truncatechars:140 }}</td></tr>{% endfor %}
-    </tbody></table></section>
+    </tbody></table>{% include "catalogo/_paginacao_fiscal.html" with pagina=lc parametro="lc_pagina" %}</section>
+  <section class="card"><h3>Tributação nacional ({{ nacional.paginator.count }})</h3>
+    <table class="tabela"><thead><tr><th>Código</th><th>Descrição</th></tr></thead><tbody>
+    {% for c in nacional %}<tr><td class="mono">{{ c.codigo }}</td><td>{{ c.descricao }}</td></tr>{% empty %}<tr><td colspan="2" class="muted">Nada encontrado.</td></tr>{% endfor %}
+    </tbody></table>{% include "catalogo/_paginacao_fiscal.html" with pagina=nacional parametro="nacional_pagina" %}</section>
 </div>
 {% endblock %}

@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block titulo %}Demonstrativo financeiro{% endblock %}{% block h1 %}Demonstrativo financeiro{% endblock %}
+{% block subtitulo %}<p class="sub">Competência para o resultado; pagamentos registrados para o caixa.</p>{% endblock %}
+{% block conteudo %}
+<form method="get" class="card linha" style="gap:12px;flex-wrap:wrap;margin-bottom:20px">
+<label>Início <input class="input" type="date" name="inicio" value="{{ inicio|date:'Y-m-d' }}"></label>
+<label>Fim <input class="input" type="date" name="fim" value="{{ fim|date:'Y-m-d' }}"></label>
+<label>Contrato <select class="input" name="contrato"><option value="">Todos</option>{% for c in contratos %}<option value="{{ c.pk }}" {% if contrato.pk == c.pk %}selected{% endif %}>{{ c }}</option>{% endfor %}</select></label><button class="btn" type="submit">Filtrar</button></form>
+<div class="grid g-2"><section class="card"><h3>Resultado por competência</h3><dl class="defs">
+<dt>Receita bruta</dt><dd>{{ dre.receita_bruta|brl }}</dd><dt>Deduções e impostos</dt><dd>{{ dre.deducoes|brl }}</dd>
+<dt>Receita líquida</dt><dd>{{ dre.receita_liquida|brl }}</dd><dt>Custos dos serviços</dt><dd>{{ dre.custos|brl }}</dd>
+<dt>Margem de contribuição</dt><dd>{{ dre.margem_contribuicao|brl }}</dd><dt>Despesas</dt><dd>{{ dre.despesas|brl }}</dd>
+<dt>Resultado não operacional</dt><dd>{{ dre.nao_operacional|brl }}</dd><dt>Resultado</dt><dd><strong>{{ dre.resultado|brl }}</strong></dd><dt>Investimentos (fora do resultado)</dt><dd>{{ dre.investimentos|brl }}</dd></dl></section>
+<section class="card"><h3>Fluxo de caixa no período</h3><dl class="defs"><dt>Entradas realizadas</dt><dd>{{ fluxo.entradas|brl }}</dd><dt>Saídas realizadas</dt><dd>{{ fluxo.saidas|brl }}</dd><dt>Entradas previstas</dt><dd>{{ fluxo.entradas_previstas|brl }}</dd><dt>Saídas previstas</dt><dd>{{ fluxo.saidas_previstas|brl }}</dd></dl></section></div>
+{% endblock %}

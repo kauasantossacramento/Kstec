@@ -1,0 +1,4 @@
+{% extends "base.html" %}
+{% block titulo %}Quadro de tarefas{% endblock %}{% block h1 %}Quadro de tarefas{% endblock %}
+{% block acoes %}<a class="btn" href="{% url 'operacao:tarefa_lista' %}">Lista de tarefas</a>{% endblock %}
+{% block conteudo %}<div class="grid" style="grid-template-columns:repeat(5,minmax(240px,1fr));gap:16px;overflow-x:auto;padding-bottom:16px">{% for coluna in colunas %}<section class="card"><h3>{{ coluna.nome }}</h3>{% for t in coluna.tarefas %}<article class="card" style="padding:12px;margin-top:12px"><a href="{% url 'operacao:tarefa_detalhe' t.pk %}"><strong>{{ t.titulo }}</strong></a><p class="small muted">{{ t.contrato|default:'Sem contrato' }}</p><p class="small">{{ t.responsavel }} · {{ t.get_prioridade_display }}</p>{% if t.prazo %}<span class="small">Prazo: {{ t.prazo|data_br }}</span>{% endif %}</article>{% empty %}<p class="small muted">Nenhuma tarefa.</p>{% endfor %}</section>{% endfor %}</div>{% endblock %}

@@ -23,6 +23,7 @@ CRUD_PESSOA = Crud(
     select_related=["endereco"],
     campos_detalhe=["cpf_cnpj", "razao_social", "nome_fantasia", "inscricao_municipal", "inscricao_estadual",
                     "email", "email_nf", "telefone", "e_orgao_publico", "esfera", "optante_simples",
+                    "situacao_cadastral", "data_abertura", "cnae_principal", "descricao_cnae", "natureza_juridica", "porte",
                     "endereco", "observacoes"],
 )
 

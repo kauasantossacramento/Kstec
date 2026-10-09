@@ -1,0 +1,3 @@
+{% extends "base.html" %}
+{% block titulo %}Importar tabelas fiscais{% endblock %}{% block h1 %}Importar tabelas fiscais{% endblock %}
+{% block conteudo %}<section class="card"><form method="post" enctype="multipart/form-data" class="stack">{% csrf_token %}{{ form.as_p }}<button class="btn btn-primary" type="submit">Importar referências</button></form><p class="muted small">Nacional: Anexo B e Anexo VIII. Municipal: lista do Anexo I ou CSV com cabeçalhos item_lc116, descricao, codigo_integracao. Os códigos municipais importados ficam pendentes de confirmação.</p></section>{% endblock %}

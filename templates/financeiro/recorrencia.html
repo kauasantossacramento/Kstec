@@ -1,0 +1,2 @@
+{% extends "crud/detalhe.html" %}
+{% block extra %}{% if pode_escrever %}<section class="card"><h3>Previsões</h3><p>Gere previsões para os próximos 12 meses. Repetir a geração preserva os lançamentos existentes. Alterações na recorrência valem para previsões ainda não geradas.</p><form method="post" action="{% url 'financeiro:gerar_recorrencia' obj.pk %}">{% csrf_token %}<button class="btn btn-primario" type="submit">Gerar previsões</button></form></section>{% endif %}{% endblock %}

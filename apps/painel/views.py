@@ -14,7 +14,7 @@ def home(request):
     hoje = timezone.localdate()
     ctx = {
         "atencao": itens_atencao(request.empresa, request.user)[:12],
-        "agenda": eventos(request.empresa, hoje, hoje + timedelta(days=15)),
+        "agenda": eventos(request.empresa, hoje, hoje + timedelta(days=15), request.user),
         **indicadores.painel(request.empresa, request.user),
     }
     return render(request, "painel/home.html", ctx)
@@ -27,7 +27,7 @@ def agenda(request):
         dias = max(7, min(int(request.GET.get("dias", 60)), 365))
     except ValueError:
         dias = 60
-    lista = eventos(request.empresa, hoje - timedelta(days=7), hoje + timedelta(days=dias))
+    lista = eventos(request.empresa, hoje - timedelta(days=7), hoje + timedelta(days=dias), request.user)
     tipos = sorted({e.tipo for e in lista})
     tipo = request.GET.get("tipo")
     if tipo:

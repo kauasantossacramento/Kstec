@@ -44,6 +44,9 @@ LOCAL_APPS = [
     "apps.contratos",
     "apps.catalogo",
     "apps.comercial",
+    "apps.fiscal",
+    "apps.financeiro",
+    "apps.operacao",
     "apps.painel",
 ]
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
@@ -245,7 +248,11 @@ LOGGING = {
     },
     "handlers": {"console": {"class": "logging.StreamHandler", "formatter": "json"}},
     "root": {"handlers": ["console"], "level": LOG_LEVEL},
-    "loggers": {"django.db.backends": {"level": "WARNING"}, "axes": {"level": "WARNING"}},
+    "loggers": {
+        "django.db.backends": {"level": "WARNING"}, "axes": {"level": "WARNING"},
+        # A API municipal exige token na query string: não registrar URLs HTTP em INFO/DEBUG.
+        "httpx": {"level": "WARNING"}, "httpcore": {"level": "WARNING"},
+    },
 }
 
 # Sentry

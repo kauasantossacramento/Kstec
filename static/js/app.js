@@ -182,22 +182,60 @@
       if (v && typeof v === "object") return preencher(form, v, prefixo);
       const el = form.querySelector(`[name="${(prefixo || "") + k}"]`);
       if (!el || v === null || v === undefined || v === "") return;
-      if (el.type === "checkbox") el.checked = !!v; else el.value = v;
+      if (el.type === "checkbox") el.checked = !!v;
+      else if (el.tagName === "SELECT" && typeof v === "boolean") el.value = v ? "true" : "false";
+      else el.value = v;
       el.dispatchEvent(new Event("input"));
     });
   }
+  async function buscarCnpj(i) {
+    const doc = digitos(i.value);
+    const status = i.form.querySelector("[data-status-consulta]");
+    const botao = i.form.querySelector("[data-buscar-cnpj]");
+    if (doc.length !== 14) {
+      if (status) status.textContent = "Informe um CNPJ com 14 dígitos. A consulta não atende CPF.";
+      return;
+    }
+    if (i._consultaCnpj && i._consultaCnpj.doc === doc) return;
+    if (i._consultaCnpj) i._consultaCnpj.controle.abort();
+    const consulta = {doc, controle: new AbortController()};
+    i._consultaCnpj = consulta;
+    if (status) status.textContent = "Consultando CNPJ na BrasilAPI…";
+    if (botao) botao.disabled = true;
+    try {
+      const resposta = await fetch(i.dataset.consultaCnpj + "?cnpj=" + doc, {signal: consulta.controle.signal});
+      let dados;
+      try { dados = await resposta.json(); }
+      catch { throw new Error("Resposta inválida do serviço de consulta. Tente novamente."); }
+      if (digitos(i.value) !== doc) return;
+      if (!resposta.ok || dados.erro) throw new Error(dados.erro || "Consulta indisponível. Tente novamente.");
+      preencher(i.form, {...dados, cnpj: dados.cpf_cnpj});
+      const simples = i.form.querySelector('[name="optante_simples"]');
+      if (simples && simples.tagName === "SELECT" && dados.optante_simples === null) simples.value = "unknown";
+      if (status) status.textContent = `BrasilAPI: ${dados.situacao || "consulta concluída"}. Confira os dados antes de salvar.`;
+      toast("Dados da empresa preenchidos. Confira e salve o cadastro.", "success");
+    } catch (erro) {
+      if (erro.name === "AbortError") return;
+      if (digitos(i.value) !== doc) return;
+      const mensagem = erro.message === "Failed to fetch" ? "Falha de conexão. Tente novamente ou preencha manualmente." : erro.message;
+      if (status) status.textContent = mensagem;
+      toast(mensagem, "warning");
+    } finally {
+      if (i._consultaCnpj === consulta) {
+        delete i._consultaCnpj;
+        if (botao) botao.disabled = false;
+      }
+    }
+  }
+  document.addEventListener("click", (e) => {
+    const botao = e.target.closest("[data-buscar-cnpj]");
+    if (botao) buscarCnpj(botao.form.querySelector("[data-consulta-cnpj]"));
+  });
   document.addEventListener("focusout", (e) => {
     const i = e.target;
     if (!i.matches || !i.form) return;
     if (i.matches("[data-consulta-cnpj]") && digitos(i.value).length === 14) {
-      const status = i.form.querySelector("[data-status-consulta]");
-      if (status) status.textContent = "Consultando CNPJ…";
-      fetch(i.dataset.consultaCnpj + "?cnpj=" + digitos(i.value)).then((r) => r.json()).then((d) => {
-        if (d.erro) { if (status) status.textContent = d.erro; toast(d.erro, "warning"); return; }
-        preencher(i.form, d);
-        if (status) status.textContent = d.situacao ? `Situação na Receita: ${d.situacao}` : "";
-        toast("Dados preenchidos a partir da Receita Federal.", "success");
-      }).catch(() => { if (status) status.textContent = ""; });
+      buscarCnpj(i);
     }
     if (i.matches("[data-consulta-cep]") && digitos(i.value).length === 8) {
       fetch(i.dataset.consultaCep + "?cep=" + digitos(i.value)).then((r) => r.json()).then((d) => { if (!d.erro) preencher(i.form, d); });
@@ -251,6 +289,24 @@
   window.addEventListener("load", () => desenharGraficos(document));
 
   /* ---------------- Utilidades ---------------- */
+  $$('[data-formset-custos]').forEach((form) => {
+    const botao = form.querySelector('[data-adicionar-custo]');
+    const total = form.querySelector('[name="custos-TOTAL_FORMS"]');
+    const modelo = form.querySelector('#custo-vazio');
+    const lista = form.querySelector('[data-custos-linhas]');
+    botao.addEventListener('click', () => {
+      const indice = Number(total.value);
+      if (indice >= 100) { toast('Limite de 100 itens por planilha.', 'warning'); return; }
+      const copia = modelo.content.cloneNode(true);
+      copia.querySelectorAll('[name], [id], [for]').forEach((el) => {
+        ['name', 'id', 'for'].forEach((attr) => {
+          if (el.hasAttribute(attr)) el.setAttribute(attr, el.getAttribute(attr).replaceAll('__prefix__', String(indice)));
+        });
+      });
+      lista.appendChild(copia);
+      total.value = String(indice + 1);
+    });
+  });
   $$("[data-copiar]").forEach((b) => b.addEventListener("click", () => {
     navigator.clipboard.writeText(b.dataset.copiar).then(() => toast("Copiado.", "success"));
   }));

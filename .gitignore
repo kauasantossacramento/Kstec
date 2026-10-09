@@ -8,6 +8,10 @@ staticfiles/
 .ruff_cache/
 .coverage
 htmlcov/
+*.sqlite3
+*.sqlite3-*
+logs/
+.tools/
 backups/
 *.pfx
 *.p12

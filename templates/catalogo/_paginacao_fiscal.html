@@ -1,0 +1,5 @@
+<nav aria-label="Páginas da tabela {{ parametro }}" class="filtros">
+{% if pagina.has_previous %}<a class="btn" href="?q={{ q|urlencode }}&amp;{{ parametro }}={{ pagina.previous_page_number }}">Anterior</a>{% endif %}
+<span>Página {{ pagina.number }} de {{ pagina.paginator.num_pages }}</span>
+{% if pagina.has_next %}<a class="btn" href="?q={{ q|urlencode }}&amp;{{ parametro }}={{ pagina.next_page_number }}">Próxima</a>{% endif %}
+</nav>

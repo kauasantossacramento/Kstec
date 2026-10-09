@@ -32,7 +32,7 @@ kbd { font-size: 11px; padding: 1px 6px; border: 1px solid var(--line-2); border
   display: flex; flex-direction: column; padding: 18px 12px; overflow-y: auto; z-index: 30;
 }
 .sidebar .marca { display: flex; align-items: center; gap: 10px; padding: 4px 10px 22px; color: #fff; }
-.sidebar .marca img { height: 30px; }
+.sidebar .marca img { height: 46px; width: auto; }
 .sidebar .marca .simbolo { display: none; height: 34px; }
 .sidebar nav { display: flex; flex-direction: column; gap: 2px; }
 .sidebar a.item {

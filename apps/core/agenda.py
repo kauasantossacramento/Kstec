@@ -41,10 +41,12 @@ def atencao(fn):
     return fn
 
 
-def eventos(empresa, inicio, fim):
+def eventos(empresa, inicio, fim, usuario=None):
     saida = []
     for p in PROVEDORES_AGENDA:
         saida.extend(e for e in p(empresa, inicio, fim) if inicio <= e.data <= fim)
+    if usuario is not None and not usuario.tem_papel("Administrador", "Financeiro", "Fiscal", "Leitura"):
+        saida = [e for e in saida if e.tipo != "FINANCEIRO"]
     return sorted(saida, key=lambda e: (e.data, e.titulo))
 
 

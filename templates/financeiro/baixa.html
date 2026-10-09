@@ -1,0 +1,4 @@
+{% extends "base.html" %}
+{% block titulo %}Registrar baixa{% endblock %}{% block h1 %}Registrar baixa{% endblock %}
+{% block subtitulo %}<p class="sub">{{ obj }} · {{ obj.valor|brl }}. Registre o pagamento integral já realizado.</p>{% endblock %}
+{% block conteudo %}<form method="post" class="card stack">{% csrf_token %}{% include "components/form_campos.html" %}<div class="linha" style="gap:12px"><a class="btn" href="{% url 'financeiro:lancamento_detalhe' obj.pk %}">Voltar</a><button class="btn btn-primario" type="submit">Registrar baixa</button></div></form>{% endblock %}

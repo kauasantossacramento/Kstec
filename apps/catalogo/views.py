@@ -1,25 +1,35 @@
 from decimal import Decimal, InvalidOperation
 
+from django import forms
+from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.core.exceptions import ValidationError
+from django.core.paginator import Paginator
+from django.db.models import Q
 from django.http import JsonResponse
-from django.shortcuts import get_object_or_404, render
+from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse_lazy
 
 from apps.core.crud import Coluna, Crud, DetalheGenerico
-from apps.core.forms import FormKS
+from apps.core.forms import FormKS, FormSimples
+from apps.core.permissoes import exigir_escrita
 
 from . import services
 from .models import (
     CategoriaCatalogo,
     CodigoNBS,
     CodigoServicoLC116,
+    CodigoTributacaoNacional,
     FaixaPreco,
     ItemCatalogo,
+    ServicoMunicipal,
     VariacaoGrafica,
 )
 
 
 class ItemForm(FormKS):
+    servico_municipal = forms.ModelChoiceField(ServicoMunicipal.objects.none(), required=False,
+                label="Serviço municipal confirmado", help_text="Selecione um código confirmado do município da empresa.")
     class Meta:
         model = ItemCatalogo
         fields = ["codigo_interno", "nome", "descricao", "categoria", "natureza", "unidade", "preco_base",
@@ -31,11 +41,25 @@ class ItemForm(FormKS):
         super().__init__(*a, **kw)
         self.fields["item_lc116"].widget.attrs["data-sugestoes-url"] = reverse_lazy("catalogo:sugestoes")
         self.fields["nbs"].help_text = "Ao escolher o item da LC 116, as NBS correlatas (Anexo VIII) aparecem primeiro."
+        self.fields["item_lc116"].queryset = CodigoServicoLC116.objects.exclude(item__endswith=".00")
+        self.fields["codigo_tributacao_nacional"].queryset = CodigoTributacaoNacional.objects.filter(vigente=True).exclude(desdobro="00")
+        from apps.core import contexto
+
+        empresa = contexto.empresa_atual()
+        if empresa:
+            self.fields["servico_municipal"].queryset = ServicoMunicipal.objects.filter(
+                municipio_ibge=empresa.municipio_ibge, codigo_confirmado=True)
 
     def clean(self):
         d = super().clean()
         if d.get("natureza") == ItemCatalogo.Natureza.SERVICO and d.get("ncm"):
             self.add_error("ncm", "NCM é só para produtos.")
+        municipal = d.get("servico_municipal")
+        if municipal:
+            if not d.get("item_lc116") or d["item_lc116"].item != municipal.item_lc116:
+                self.add_error("servico_municipal", "Serviço municipal incompatível com o item LC 116.")
+            else:
+                d["codigo_tributacao_municipal"] = municipal.codigo_integracao
         return d
 
 
@@ -79,6 +103,20 @@ CRUD_FAIXA = Crud(
 )
 
 
+class CrudMunicipal(Crud):
+    def queryset(self, request):
+        return super().queryset(request).filter(municipio_ibge=request.empresa.municipio_ibge)
+
+
+CRUD_MUNICIPAL = CrudMunicipal(ServicoMunicipal, "municipal", "catalogo", caminho="municipais",
+    colunas=[Coluna("Item LC 116", "item_lc116", link=True), Coluna("Código API", "codigo_integracao"),
+             Coluna("Confirmado", "codigo_confirmado", "bool"), Coluna("Descrição", "descricao")],
+    fields=["codigo_integracao", "codigo_confirmado", "fonte"], permitir_criar=False,
+    papeis_escrita=["Fiscal"], papeis_leitura=["Fiscal", "Financeiro"], anexos=False,
+    busca=["item_lc116", "descricao", "codigo_integracao"], titulo_plural="Códigos municipais",
+    ordenacao=["item_lc116"], conversor="int")
+
+
 @login_required
 def sugestoes(request):
     lc = request.GET.get("valor", "")
@@ -104,6 +142,66 @@ def preco(request, pk):
 @login_required
 def tabelas(request):
     termo = request.GET.get("q", "").strip()
-    nbs = services.buscar_nbs(termo) if termo else CodigoNBS.objects.all()[:30]
-    lc = CodigoServicoLC116.objects.all()[:200]
-    return render(request, "catalogo/tabelas.html", {"nbs": nbs, "lc": lc, "q": termo})
+    conjuntos = {
+        "nbs": CodigoNBS.objects.all(),
+        "lc": CodigoServicoLC116.objects.exclude(item__endswith=".00"),
+        "nacional": CodigoTributacaoNacional.objects.filter(vigente=True).exclude(desdobro="00"),
+        "municipal": ServicoMunicipal.objects.filter(municipio_ibge=request.empresa.municipio_ibge),
+    }
+    ctx = {"q": termo}
+    for nome, queryset in conjuntos.items():
+        campo = "item" if nome == "lc" else "item_lc116" if nome == "municipal" else "codigo"
+        if termo:
+            queryset = queryset.filter(Q(descricao__icontains=termo) | Q(**{f"{campo}__icontains": termo}))
+        ctx[nome] = Paginator(queryset, 30).get_page(request.GET.get(f"{nome}_pagina"))
+    return render(request, "catalogo/tabelas.html", ctx)
+
+
+@login_required
+def importar_tabelas(request):
+    from django import forms
+
+    from .importador import importar_arquivo
+    from .municipal import importar_municipais
+
+    exigir_escrita(request.user, ["Administrador"])
+
+    class ImportacaoForm(FormSimples):
+        tipo = forms.ChoiceField(choices=[("nacional", "Nacional / NBS / correlação — XLSX"),
+                                        ("municipal", "Municipal — PDF do Anexo I ou CSV")])
+        arquivo = forms.FileField()
+        fonte = forms.URLField(label="URL oficial da fonte", required=True)
+
+    form = ImportacaoForm(request.POST or None, request.FILES or None)
+    if request.method == "POST" and form.is_valid():
+        arquivo = form.cleaned_data["arquivo"]
+        try:
+            if arquivo.size > 20_000_000:
+                raise ValidationError("Arquivo acima de 20 MB.")
+            if form.cleaned_data["tipo"] == "municipal":
+                total = importar_municipais(arquivo.read(), arquivo.name, request.empresa.municipio_ibge,
+                                            form.cleaned_data["fonte"])
+                resultado = f"{total} referências municipais importadas. Códigos de integração aguardam confirmação."
+            else:
+                import zipfile
+
+                if not arquivo.name.lower().endswith(".xlsx"):
+                    raise ValidationError("Selecione uma planilha XLSX oficial.")
+                with zipfile.ZipFile(arquivo) as pacote:
+                    if sum(i.file_size for i in pacote.infolist()) > 100_000_000:
+                        raise ValidationError("Conteúdo da planilha acima de 100 MB.")
+                arquivo.seek(0)
+                r = importar_arquivo(arquivo)
+                if not (r.lc116 + r.nbs + r.ctribnac + r.correlacoes):
+                    raise ValidationError("Nenhum registro reconhecido; confira o arquivo.")
+                from apps.core.models import Parametro
+
+                Parametro.definir("fiscal.ultima_importacao", {"fonte": form.cleaned_data["fonte"],
+                                  "arquivo": arquivo.name, "resultado": str(r)}, empresa=request.empresa)
+                resultado = str(r)
+            messages.success(request, resultado)
+            return redirect("catalogo:tabelas")
+        except Exception as erro:
+            form.add_error(None, "; ".join(erro.messages) if isinstance(erro, ValidationError)
+                           else f"Importação não concluída ({type(erro).__name__}).")
+    return render(request, "catalogo/importar_tabelas.html", {"form": form})

@@ -1,0 +1,2 @@
+# Preserve os schemas de terceiros; espaços do material original não são lint do app.
+apps/fiscal/xml/schemas/**/*.xsd -whitespace

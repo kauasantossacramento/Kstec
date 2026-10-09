@@ -2,7 +2,7 @@
 
 import httpx
 
-from ..validadores import so_digitos
+from ..validadores import cnpj_valido, so_digitos
 from .integracao import cronometro, registrar_log
 
 TIMEOUT = httpx.Timeout(10, connect=5)
@@ -14,6 +14,8 @@ class ConsultaIndisponivel(Exception):
 
 def consultar_cnpj(cnpj: str) -> dict:
     cnpj = so_digitos(cnpj)
+    if not cnpj_valido(cnpj):
+        raise ConsultaIndisponivel("Informe um CNPJ válido com 14 dígitos.")
     url = f"https://brasilapi.com.br/api/cnpj/v1/{cnpj}"
     with cronometro() as t:
         try:
@@ -21,23 +23,34 @@ def consultar_cnpj(cnpj: str) -> dict:
         except httpx.HTTPError as e:
             registrar_log("BRASILAPI", "cnpj", request=url, response=str(e), duracao_ms=t())
             raise ConsultaIndisponivel("Serviço de consulta de CNPJ indisponível.") from e
-    registrar_log("BRASILAPI", "cnpj", request=url, response=r.text[:5000], status_http=r.status_code,
+    registrar_log("BRASILAPI", "cnpj", request=url,
+                  response="Dados cadastrais recebidos." if r.status_code == 200 else r.text[:1000], status_http=r.status_code,
                   duracao_ms=t(), sucesso=r.status_code == 200)
     if r.status_code == 404:
         raise ConsultaIndisponivel("CNPJ não encontrado na Receita Federal.")
     if r.status_code != 200:
-        raise ConsultaIndisponivel(f"Consulta de CNPJ retornou HTTP {r.status_code}.")
-    d = r.json()
+        raise ConsultaIndisponivel("BrasilAPI indisponível no momento. Tente novamente ou preencha os dados manualmente.")
+    try:
+        d = r.json()
+    except ValueError as e:
+        raise ConsultaIndisponivel("O serviço de CNPJ retornou uma resposta inválida. Tente novamente.") from e
+    if not isinstance(d, dict) or not d.get("razao_social"):
+        raise ConsultaIndisponivel("O serviço de CNPJ retornou dados incompletos. Tente novamente.")
     return {
         "cpf_cnpj": cnpj,
         "razao_social": d.get("razao_social") or "",
         "nome_fantasia": d.get("nome_fantasia") or "",
         "email": (d.get("email") or "").lower(),
         "telefone": d.get("ddd_telefone_1") or "",
-        "optante_simples": bool(d.get("opcao_pelo_simples")),
+        "optante_simples": d.get("opcao_pelo_simples") if isinstance(d.get("opcao_pelo_simples"), bool) else None,
         "situacao": d.get("descricao_situacao_cadastral") or "",
+        "situacao_cadastral": d.get("descricao_situacao_cadastral") or "",
+        "data_abertura": d.get("data_inicio_atividade") or "",
         "cnae": str(d.get("cnae_fiscal") or ""),
+        "cnae_principal": str(d.get("cnae_fiscal") or ""),
+        "descricao_cnae": d.get("cnae_fiscal_descricao") or "",
         "natureza_juridica": d.get("natureza_juridica") or "",
+        "porte": d.get("porte") or "",
         "endereco": {
             "cep": so_digitos(d.get("cep")),
             "tipo_logradouro": d.get("descricao_tipo_de_logradouro") or "",

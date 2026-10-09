@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block titulo %}Configuração fiscal{% endblock %}
+{% block h1 %}Configuração fiscal{% endblock %}
+{% block subtitulo %}<p class="sub">Canal, certificado, percentuais da competência e recebimento das notas.</p>{% endblock %}
+{% block conteudo %}
+<div class="grid g-2-1"><section class="card"><form method="post" enctype="multipart/form-data" class="stack">{% csrf_token %}
+{{ form.non_field_errors }}<div class="grid g-2">{% for campo in form %}<div><label for="{{ campo.id_for_label }}">{{ campo.label }}</label>{{ campo }}{{ campo.errors }}{% if campo.help_text %}<p class="muted small">{{ campo.help_text }}</p>{% endif %}</div>{% endfor %}</div>
+{% if pode_salvar %}<button class="btn btn-primario" type="submit">Salvar configuração</button>{% endif %}</form></section>
+<aside class="stack"><section class="card"><h3>Pronto para emitir?</h3>{% for rotulo, ok in checklist %}<p>{% if ok %}✓{% else %}○{% endif %} {{ rotulo }}</p>{% endfor %}</section>
+<section class="card"><h3>Credenciais</h3><p>Token municipal: {{ config.token_municipal_id|yesno:"cadastrado,não cadastrado" }}</p>{% if config.certificado %}<p>{{ config.certificado.nome }}</p><p>Validade: {{ config.certificado.validade_fim|date:"d/m/Y" }}</p>{% endif %}<p class="muted small">Senhas e arquivo A1 ficam cifrados e não são exibidos.</p></section>
+<section class="card"><a href="{% url 'catalogo:tabelas' %}">Consultar serviços municipais, nacionais e NBS</a><p class="muted small">Confirme o código municipal de cada serviço antes da transmissão. A vigência dos percentuais limita as competências em que podem ser usados.</p></section></aside></div>
+{% endblock %}

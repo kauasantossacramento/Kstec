@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block titulo %}Financeiro{% endblock %}
+{% block h1 %}Financeiro{% endblock %}
+{% block subtitulo %}<p class="sub">Contas e previsão de caixa para os próximos 90 dias.</p>{% endblock %}
+{% block conteudo %}
+<section class="card" style="margin-bottom:16px"><h3>Recebíveis por atraso</h3><div class="grid g-4">{% for faixa in aging %}<div><p class="muted small">{{ faixa.nome }}</p><strong>{{ faixa.total|brl }}</strong><p class="small">{{ faixa.quantidade }} lançamento(s)</p></div>{% endfor %}</div></section>
+<div class="linha" style="gap:12px;flex-wrap:wrap;margin-bottom:20px">
+  <a class="btn btn-primario" href="{% url 'financeiro:lancamento_lista' %}">Lançamentos</a>
+  <a class="btn" href="{% url 'financeiro:conta_lista' %}">Contas bancárias</a>
+  <a class="btn" href="{% url 'financeiro:categoria_lista' %}">Categorias</a>
+  <a class="btn" href="{% url 'financeiro:centro_lista' %}">Centros de custo</a>
+  <a class="btn" href="{% url 'financeiro:recorrencia_lista' %}">Recorrências</a>
+  <a class="btn" href="{% url 'financeiro:extratos' %}">Extratos e conciliação</a>
+  <a class="btn" href="{% url 'financeiro:demonstrativo' %}">Demonstrativo e fluxo de caixa</a>
+</div>
+<div class="grid g-3">
+{% for s in saldos %}<section class="card"><h3>{{ s.conta }}</h3><strong class="mono">{{ s.saldo|brl }}</strong><p class="muted small">Saldo pelos pagamentos registrados.</p></section>{% empty %}<section class="card"><p>Cadastre uma conta bancária para começar.</p></section>{% endfor %}
+<section class="card"><h3>A receber em 90 dias</h3><strong class="mono">{{ fluxo.entradas_previstas|brl }}</strong></section>
+<section class="card"><h3>A pagar em 90 dias</h3><strong class="mono">{{ fluxo.saidas_previstas|brl }}</strong></section>
+</div>
+<section class="card" style="margin-top:20px"><h3>Vencidos</h3>
+{% for l in vencidos %}<div class="linha entre"><a href="{% url 'financeiro:lancamento_detalhe' l.pk %}">{{ l }}</a><span>{{ l.data_vencimento|data_br }} · {{ l.valor|brl }}</span></div>{% empty %}<p class="muted">Nenhum lançamento vencido.</p>{% endfor %}</section>
+{% endblock %}

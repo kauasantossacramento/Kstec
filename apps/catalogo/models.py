@@ -2,7 +2,9 @@
 
 from decimal import Decimal
 
+from django.core.exceptions import ValidationError
 from django.db import models
+from simple_history.models import HistoricalRecords
 
 from apps.core.models import ModeloBase
 
@@ -33,6 +35,7 @@ class CodigoTributacaoNacional(models.Model):
     subitem = models.CharField(max_length=2)
     desdobro = models.CharField(max_length=2, default="01")
     descricao = models.TextField("descrição")
+    vigente = models.BooleanField(default=True, help_text="Disponível na última lista oficial importada.")
 
     class Meta:
         verbose_name = "código de tributação nacional"
@@ -86,6 +89,29 @@ class CorrelacaoNBS(models.Model):
 
     def __str__(self):
         return f"{self.item_lc116} → {self.nbs}"
+
+
+class ServicoMunicipal(models.Model):
+    municipio_ibge = models.CharField(max_length=7)
+    item_lc116 = models.CharField(max_length=5)
+    descricao = models.TextField()
+    codigo_integracao = models.CharField(max_length=20, blank=True)
+    fonte = models.URLField(max_length=500)
+    codigo_confirmado = models.BooleanField(default=False)
+    atualizado_em = models.DateTimeField(auto_now=True)
+    history = HistoricalRecords()
+
+    def clean(self):
+        super().clean()
+        if self.codigo_confirmado and not self.codigo_integracao.strip():
+            raise ValidationError({"codigo_integracao": "Informe o código de integração confirmado pelo município."})
+
+    class Meta:
+        ordering = ["item_lc116"]
+        constraints = [models.UniqueConstraint(fields=["municipio_ibge", "item_lc116"], name="servico_municipal_unico")]
+
+    def __str__(self):
+        return f"{self.codigo_integracao or self.item_lc116} — {self.descricao[:100]}"
 
 
 # ---------------------------------------------------------------------------
@@ -172,6 +198,8 @@ class ItemCatalogo(ModeloBase):
             faltas.append("Item da LC 116 não informado.")
         if not self.codigo_tributacao_nacional_id:
             faltas.append("Código de tributação nacional (cTribNac) não informado.")
+        elif not self.codigo_tributacao_nacional.vigente or self.codigo_tributacao_nacional.desdobro == "00":
+            faltas.append("Código de tributação nacional indisponível na lista oficial atual.")
         if not self.nbs_id:
             faltas.append("NBS não informado (obrigatório desde 01/2026).")
         return faltas

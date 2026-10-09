@@ -168,8 +168,18 @@ def busca(request):
 def anexo_baixar(request, pk):
     anexo = get_object_or_404(Anexo, pk=pk, empresa=request.empresa)
     objeto = anexo.objeto
-    if objeto is not None and objeto.__class__.__name__ in ("NotaFiscal", "Lancamento", "GuiaISS"):
+    if objeto is not None and objeto.__class__.__name__ == "Tarefa":
+        from apps.operacao.services import visiveis
+
+        if not visiveis(request.user, request.empresa).filter(pk=objeto.pk).exists():
+            raise PermissionDenied
+    if objeto is not None and objeto.__class__.__name__ in ("NotaFiscal", "Lancamento", "GuiaISS", "PlanilhaCustos", "ItemCusto", "EntregaNota"):
         if not request.user.tem_papel("Administrador", "Fiscal", "Financeiro", "Leitura"):
+            raise PermissionDenied
+    if objeto is not None and objeto.__class__.__name__ == "RelatorioAtividades":
+        from apps.contratos.views import contratos_visiveis
+
+        if not contratos_visiveis(request.user, objeto.contrato.__class__.objects.filter(empresa=request.empresa)).filter(pk=objeto.contrato_id).exists():
             raise PermissionDenied
     LogAcesso.objects.create(
         usuario=request.user, acao="download", content_type=anexo.content_type, object_id=anexo.object_id,
@@ -215,6 +225,11 @@ def configuracoes(request):
 
 
 class EmpresaForm(FormKS):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["cnpj"].widget.attrs["data-consulta-cnpj"] = reverse("core:consulta_cnpj")
+        self.fields["cnpj"].help_text = "Consulte o CNPJ e confira os dados antes de salvar."
+
     class Meta:
         model = Empresa
         fields = ["razao_social", "nome_fantasia", "cnpj", "inscricao_municipal", "inscricao_estadual",

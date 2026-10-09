@@ -65,8 +65,36 @@ def _descricao(celulas: list[str], usados: set[int]) -> str:
 
 def importar_lista_servicos(ws, r: Resultado):
     descricoes_item = {}
+    colunas = None
+    total_antes = r.ctribnac
     for linha in ws.iter_rows(values_only=True):
         cel = [_txt(c) for c in linha]
+        normalizadas = [_norm(c) for c in cel]
+        if "CODIGO DE TRIBUTACAO NACIONAL" in normalizadas and "SUBITEM" in normalizadas:
+            colunas = {nome: normalizadas.index(nome) for nome in
+                       ["CODIGO DE TRIBUTACAO NACIONAL", "ITEM", "SUBITEM", "DESDOBRO NACIONAL", "DESCRICAO"]}
+            CodigoTributacaoNacional.objects.update(vigente=False)
+            continue
+        if colunas is not None:
+            bruto = cel[colunas["CODIGO DE TRIBUTACAO NACIONAL"]]
+            it, sub = cel[colunas["ITEM"]], cel[colunas["SUBITEM"]]
+            desc = cel[colunas["DESCRICAO"]]
+            if not it.isdigit() or not sub.isdigit() or int(sub) == 0:
+                continue  # Cabeçalhos de grupo (01.00) não são serviços tributáveis.
+            item = f"{int(it):02d}.{int(sub):02d}"
+            descricoes_item.setdefault(item, desc)
+            if not bruto:
+                # Linha de subitem da LC 116: o desdobro 00 é agrupador, não cTribNac.
+                CodigoServicoLC116.objects.update_or_create(item=item, defaults={"descricao": desc})
+                r.lc116 += 1
+                continue
+            cod = bruto.replace(".", "").zfill(6)
+            if not RE_CTRIB6.fullmatch(cod):
+                raise ValueError(f"Código nacional inválido no anexo: {bruto}")
+            CodigoTributacaoNacional.objects.update_or_create(codigo=cod, defaults={
+                "item": cod[:2], "subitem": cod[2:4], "desdobro": cod[4:6], "descricao": desc, "vigente": True})
+            r.ctribnac += 1
+            continue
         # Formato A: código completo numa célula ("01.07.01", "010701" ou "01.07")
         for i, c in enumerate(cel):
             m3 = RE_DESDOBRO.match(c)
@@ -98,6 +126,8 @@ def importar_lista_servicos(ws, r: Resultado):
                     codigo=cod, defaults={"item": cod[:2], "subitem": cod[2:4], "desdobro": cod[4:6], "descricao": desc})
                 r.ctribnac += 1
                 descricoes_item.setdefault(f"{cod[:2]}.{cod[2:4]}", desc)
+    if colunas is not None and r.ctribnac == total_antes:
+        raise ValueError("Anexo sem códigos nacionais; importação cancelada para preservar a lista anterior.")
     # Itens da LC 116 que só apareceram via desdobro
     for item, desc in descricoes_item.items():
         _, criado = CodigoServicoLC116.objects.get_or_create(item=item, defaults={"descricao": desc})
@@ -170,6 +200,8 @@ def importar_correlacao(ws, r: Resultado):
         dados = {campo: (cel[i] if i < len(cel) else "")[:300] for campo, i in mapa.items()
                  if campo not in ("item_lc116", "nbs")}
         lote.append(CorrelacaoNBS(item_lc116=item_atual, nbs=nbs, **dados))
+    if not lote:
+        raise ValueError("Nenhuma correlação válida encontrada; tabela anterior preservada.")
     CorrelacaoNBS.objects.bulk_create(lote, batch_size=1000)
     r.correlacoes += len(lote)
     if mapa is None:

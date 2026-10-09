@@ -67,6 +67,25 @@ def test_importador_anexos(db, tmp_path):
     assert r.correlacoes == 2
 
 
+def test_importador_anexo_el_numerico_nao_cria_agrupadores(db, tmp_path):
+    anterior = CodigoTributacaoNacional.objects.create(codigo="200102", item="20", subitem="01", desdobro="02", descricao="Anterior")
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "LISTA.SERV.NAC."
+    ws.append(["CÓDIGO DE TRIBUTAÇÃO NACIONAL", "ITEM", "SUBITEM", "DESDOBRO NACIONAL", "DESCRIÇÃO"])
+    ws.append([None, 1, 0, 0, "Informática"])
+    ws.append([None, 1, 7, 0, "Suporte"])
+    ws.append([10701, 1, 7, 1, "Suporte técnico"])
+    arquivo = tmp_path / "oficial.xlsx"
+    wb.save(arquivo)
+    r = importar_arquivo(arquivo)
+    assert r.ctribnac == 1
+    assert list(CodigoTributacaoNacional.objects.filter(vigente=True).values_list("codigo", flat=True)) == ["010701"]
+    anterior.refresh_from_db()
+    assert not anterior.vigente
+    assert list(CodigoServicoLC116.objects.values_list("item", flat=True)) == ["01.07"]
+
+
 def test_preco_500_cartoes_com_variacoes(catalogo):
     v = {x.opcao: x.pk for x in catalogo.variacoes.all()}
     calc = calcular_preco(catalogo, 500, [v["Couché 300g"], v["Verniz localizado"],

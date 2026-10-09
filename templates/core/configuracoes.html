@@ -5,6 +5,7 @@
 {% block conteudo %}
 <div class="grid g-3">
   <a class="card" href="{% url 'core:empresa' %}"><h3>{% icone "briefcase" 18 %} Empresa</h3><p class="muted small">Razão social, inscrições, regime tributário.</p></a>
+  {% if request.user.is_superuser or "Administrador" in request.user.papeis or "Fiscal" in request.user.papeis or "Financeiro" in request.user.papeis or "Leitura" in request.user.papeis %}<a class="card" href="{% url 'fiscal:configuracao' %}"><h3>{% icone "receipt" 18 %} Emissão de notas</h3><p class="muted small">Certificado A1, canal, serviços, tributos e recebíveis.</p></a>{% endif %}
   {% if request.user.is_superuser or "Administrador" in request.user.papeis %}
   <a class="card" href="{% url 'core:usuario_lista' %}"><h3>{% icone "users" 18 %} Usuários e papéis</h3><p class="muted small">Acesso, papéis e MFA.</p></a>
   {% endif %}

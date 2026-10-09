@@ -53,7 +53,7 @@ def sugestoes_fiscais(item_lc116: str) -> dict:
     nbs_codigos = list(CorrelacaoNBS.objects.filter(item_lc116=item_lc116).values_list("nbs", flat=True).distinct())
     nbs = CodigoNBS.objects.filter(codigo__in=nbs_codigos)
     item, sub = (item_lc116.split(".") + [""])[:2]
-    ctrib = CodigoTributacaoNacional.objects.filter(item=item, subitem=sub)
+    ctrib = CodigoTributacaoNacional.objects.filter(item=item, subitem=sub, vigente=True).exclude(desdobro="00")
     return {
         "nbs": [{"id": str(n.pk), "rotulo": str(n)} for n in nbs],
         "codigo_tributacao_nacional": [{"id": str(c.pk), "rotulo": str(c)} for c in ctrib],

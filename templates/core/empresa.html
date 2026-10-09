@@ -5,6 +5,10 @@
 {% block subtitulo %}<p class="sub">Usados nos documentos fiscais, relatórios e propostas.</p>{% endblock %}
 {% block conteudo %}
 <form method="post" class="card">{% csrf_token %}
+  <div class="linha" style="gap:12px;margin-bottom:16px">
+    <button class="btn btn-sm" type="button" data-buscar-cnpj>Consultar CNPJ</button>
+    <span class="small muted" data-status-consulta aria-live="polite">Consulta cadastral pela BrasilAPI.</span>
+  </div>
   {% include "components/form_campos.html" %}
   <div class="form-acoes"><button class="btn btn-primario" type="submit">Salvar</button></div>
 </form>

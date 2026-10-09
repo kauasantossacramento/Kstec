@@ -28,13 +28,14 @@ class PessoaForm(FormKS):
         model = Pessoa
         fields = ["cpf_cnpj", "razao_social", "nome_fantasia", "inscricao_municipal", "inscricao_estadual",
                   "email", "email_nf", "telefone", "eh_cliente", "eh_fornecedor", "e_orgao_publico", "esfera",
-                  "optante_simples", "observacoes"]
+                  "optante_simples", "situacao_cadastral", "data_abertura", "cnae_principal", "descricao_cnae",
+                  "natureza_juridica", "porte", "observacoes"]
 
     def __init__(self, *a, **kw):
         super().__init__(*a, **kw)
         self.fields["cpf_cnpj"].widget.attrs["data-consulta-cnpj"] = reverse_lazy("core:consulta_cnpj")
         self.fields["cpf_cnpj"].widget.attrs["autofocus"] = True
-        self.fields["cpf_cnpj"].help_text = "Digite o CNPJ e saia do campo: os dados são buscados na Receita."
+        self.fields["cpf_cnpj"].help_text = "Digite o CNPJ e saia do campo ou clique em Consultar CNPJ. Confira os dados antes de salvar."
         self.fields["cep"].widget.attrs["data-consulta-cep"] = reverse_lazy("core:consulta_cep")
         e = self.instance.endereco if self.instance.pk else None
         if e:
@@ -43,7 +44,9 @@ class PessoaForm(FormKS):
 
     def clean_cpf_cnpj(self):
         doc = so_digitos(self.cleaned_data["cpf_cnpj"])
-        qs = Pessoa.objects.filter(cpf_cnpj=doc)
+        from apps.core import contexto
+
+        qs = Pessoa.objects.filter(cpf_cnpj=doc, empresa=contexto.empresa_atual())
         if self.instance.pk:
             qs = qs.exclude(pk=self.instance.pk)
         if qs.exists():
