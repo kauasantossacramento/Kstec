@@ -24,11 +24,11 @@ def pendencias(empresa, usuario):
         return []
     itens = []
     url = reverse("faturamento:home")
-    aguardando = CicloFaturamento.objects.filter(empresa=empresa, status=S.AGUARDANDO).count()
+    aguardando = CicloFaturamento.objects.filter(empresa=empresa, status=S.AGUARDANDO, agenda__ativo=True).count()
     if aguardando:
         itens.append(ItemAtencao(f"{aguardando} emissão(ões) aguardando sua confirmação", url, "warning", 5,
                                  icone="repeat"))
-    bloqueados = CicloFaturamento.objects.filter(empresa=empresa, status__in=[S.BLOQUEADO, S.FALHA],
+    bloqueados = CicloFaturamento.objects.filter(empresa=empresa, status__in=[S.BLOQUEADO, S.FALHA], agenda__ativo=True,
                                                  data_emissao__lte=timezone.localdate()).count()
     if bloqueados:
         itens.append(ItemAtencao(f"{bloqueados} faturamento(s) bloqueado(s) ou com falha", url, "danger", 4,

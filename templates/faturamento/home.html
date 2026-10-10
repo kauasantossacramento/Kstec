@@ -33,15 +33,17 @@
   <section>
     <div class="card-cab"><h2>Agendas</h2>{% if sem_agenda %}<span class="small muted">{{ sem_agenda }} contrato(s) mensal(is) vigente(s) sem agenda</span>{% endif %}</div>
     <div class="tabela-wrap responsiva"><table class="tabela">
-      <thead><tr><th>Contrato</th><th>Regra</th><th class="num">Valor</th><th>Próxima emissão</th><th>Situação</th></tr></thead>
+      <thead><tr><th>Contrato</th><th>Emissão</th><th>Vencimento</th><th class="num">Valor</th><th>Próxima emissão</th><th>Situação</th><th></th></tr></thead>
       <tbody>
       {% for l in linhas %}{% with a=l.agenda %}
       <tr class="clicavel" data-href="{% url 'faturamento:agenda' a.pk %}">
         <td data-rotulo="Contrato"><a href="{% url 'faturamento:agenda' a.pk %}"><strong>{{ a.contrato.numero }}</strong></a><br><span class="small muted">{{ a.contrato.cliente|truncatechars:38 }}</span></td>
-        <td data-rotulo="Regra" class="small">Dia {{ a.dia_emissao }} · {{ a.get_modo_display|lower|truncatechars:34 }}</td>
+        <td data-rotulo="Emissão" class="small"><strong>Dia {{ a.dia_emissao }}</strong>{% if a.dia_util %} (útil){% endif %} · {{ a.hora_emissao|time:"H:i" }}<br><span class="muted">{% if a.referencia == "MES_ANTERIOR" %}competência anterior{% else %}mesma competência{% endif %} · {{ a.get_modo_display|lower|truncatechars:28 }}</span></td>
+        <td data-rotulo="Vencimento" class="small">{% if a.tipo_vencimento == "DIA_FIXO" %}todo dia {{ a.dia_vencimento }}{% else %}{{ a.prazo_dias }} dias{% endif %}</td>
         <td data-rotulo="Valor" class="num mono">{{ a.valor|brl }}</td>
         <td data-rotulo="Próxima">{% if l.proxima %}{{ l.proxima.emissao|data_br }}{% else %}<span class="muted">—</span>{% endif %}</td>
         <td data-rotulo="Situação">{% if a.ativo %}<span class="estado">Ativa</span>{% else %}<span class="estado pausada">Pausada</span>{% endif %}</td>
+        <td>{% if pode_escrever %}<a class="btn btn-sm" href="{% url 'faturamento:agenda_editar' a.pk %}?passo=3" title="Alterar dia de emissão e vencimento">{% icone "calendar" 14 %} Datas</a>{% endif %}</td>
       </tr>
       {% endwith %}{% endfor %}
       </tbody>

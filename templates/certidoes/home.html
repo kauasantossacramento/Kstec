@@ -6,7 +6,7 @@
 {% block acoes %}
 <a class="btn" href="{% url 'certidoes:certidao_lista' %}">Todas as certidões</a>
 <a class="btn" href="{% url 'certidoes:kit_lista' %}">{% icone "zip" 16 %} Kits</a>
-{% if pode_escrever %}<a class="btn btn-primario btn-pill" href="{% url 'certidoes:certidao_nova' %}">{% icone "upload" 16 %} Nova certidão</a>{% endif %}
+{% if pode_escrever %}<a class="btn btn-primario btn-pill" href="{% url 'certidoes:lote' %}">{% icone "upload" 16 %} Enviar PDFs</a>{% endif %}
 {% endblock %}
 {% block conteudo %}
 <div class="card" style="margin-bottom:16px">
@@ -15,6 +15,7 @@
     <p class="muted small" style="max-width:520px;margin:0">APTA: todas as obrigatórias válidas · ATENÇÃO: alguma vence em até 15 dias · INAPTA: alguma obrigatória vencida, positiva ou ausente.</p>
   </div>
 </div>
+<div class="alerta">{% icone "info" 18 %}<div class="small"><strong>Renovar é rápido:</strong> clique em “Emitir no site oficial”, baixe o PDF e solte em “Enviar PDFs” — o sistema reconhece o tipo, número, emissão, validade e situação. Os sites oficiais usam captcha, por isso a emissão em si é feita por você.</div></div>
 <div class="tabela-wrap responsiva">
 <table class="tabela">
   <thead><tr><th>Certidão</th><th>Órgão</th><th>Validade</th><th>Dias</th><th>Status</th><th>Obrigatória</th><th></th></tr></thead>
@@ -27,8 +28,8 @@
     <td data-rotulo="Dias" class="mono">{{ l.certidao.dias_restantes|default_if_none:"—" }}</td>
     <td data-rotulo="Status">{% if l.status == "AUSENTE" %}{% status_badge "VENCIDA" "Certidao" "Ausente" %}{% else %}{% status_badge l.status "Certidao" %}{% endif %}</td>
     <td data-rotulo="Obrigatória">{{ l.tipo.obrigatoria_habilitacao|yesno:"Sim,Não" }}</td>
-    <td>{% if l.tipo.url_emissao %}<a class="btn btn-sm" href="{{ l.tipo.url_emissao }}" target="_blank" rel="noopener">{% icone "link" 14 %} Emitir nova</a>{% endif %}
-        {% if pode_escrever %}<a class="btn btn-sm btn-fantasma" href="{% url 'certidoes:certidao_nova' %}?tipo={{ l.tipo.pk }}">{% icone "upload" 14 %} Enviar</a>{% endif %}</td>
+    <td data-rotulo="Renovar"><div class="linha" style="gap:6px;flex-wrap:nowrap">{% if l.tipo.url_emissao %}<a class="btn btn-sm{% if l.status != 'VALIDA' %} btn-primario{% endif %}" href="{{ l.tipo.url_emissao }}" target="_blank" rel="noopener">{% icone "link" 14 %} Emitir no site oficial</a>{% endif %}
+        {% if pode_escrever %}<a class="btn btn-sm btn-fantasma" href="{% url 'certidoes:lote' %}">{% icone "upload" 14 %} Enviar PDF</a>{% endif %}</div></td>
   </tr>
   {% endfor %}
   </tbody>

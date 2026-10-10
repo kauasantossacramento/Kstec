@@ -25,6 +25,11 @@ class ContratoForm(FormKS):
         widgets = {"certidoes_exigidas": forms.CheckboxSelectMultiple, "responsaveis": forms.CheckboxSelectMultiple,
                    "cor": forms.TextInput(attrs={"type": "color"})}
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["dia_faturamento"].help_text = ("Usado só na estimativa de recebimentos. As datas reais de emissão e "
+                                                    "vencimento ficam em Faturamento recorrente (botão “Alterar datas” no contrato).")
+
     def clean(self):
         d = super().clean()
         if d.get("vigencia_inicio") and d.get("vigencia_fim") and d["vigencia_fim"] < d["vigencia_inicio"]:
@@ -40,8 +45,19 @@ def contratos_visiveis(user, qs):
 
 
 class ContratoLista(ListaGenerica):
+    """Por padrão mostra só os vigentes; o filtro Status (ou ?todos=1) exibe encerrados e suspensos."""
+
     def get_queryset(self):
-        return contratos_visiveis(self.request.user, super().get_queryset())
+        qs = contratos_visiveis(self.request.user, super().get_queryset())
+        if not self.request.GET.get("status") and not self.request.GET.get("todos"):
+            qs = qs.filter(status=Contrato.Status.VIGENTE)
+        return qs
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        base = contratos_visiveis(self.request.user, Contrato.objects.filter(empresa=self.request.empresa))
+        ctx["inativos"] = base.exclude(status=Contrato.Status.VIGENTE).count()
+        return ctx
 
 
 class ContratoHub(DetalheGenerico):
@@ -60,6 +76,13 @@ class ContratoHub(DetalheGenerico):
         if aba not in dict(ABAS):
             aba = "resumo"
         alertas = services.alertas_contrato(c)
+        agenda = getattr(c, "agenda_faturamento", None)
+        if agenda is not None:
+            from apps.faturamento.services import ciclos as srv_ciclos
+
+            ctx["agenda"] = agenda
+            ctx["proxima_emissao"] = srv_ciclos.proxima_execucao(agenda) if agenda.ativo else None
+        ctx["situacoes_inativas"] = [s for s in Contrato.Status.choices if s[0] not in ("VIGENTE", "RASCUNHO")]
         ctx.update({"abas": ABAS, "aba": aba, "alertas": alertas,
                     "saldo_baixo": any(a["chave"] == "saldo" for a in alertas), "fim_proximo": c.dias_para_fim < 30})
         if aba == "resumo":
@@ -77,7 +100,7 @@ class ContratoHub(DetalheGenerico):
 
 CRUD_CONTRATO = Crud(
     model=Contrato, prefixo="contrato", namespace="contratos", caminho="",
-    subtitulo="Cada contrato é um centro de custo e de resultado.",
+    subtitulo="Mostrando os contratos vigentes. Use o filtro Status para ver encerrados, suspensos e rescindidos.",
     colunas=[Coluna("Número", "numero", "mono", link=True), Coluna("Cliente", "cliente"),
              Coluna("Modalidade", "modalidade"), Coluna("Fim da vigência", "vigencia_fim", "data"),
              Coluna("Valor global", "valor_global", "brl"), Coluna("Status", "status", "status", "Contrato")],
@@ -115,6 +138,23 @@ CRUD_COMPETENCIA = Crud(
     fields=["status"], filtros=["status"], ordenacao=["-ano_mes"], select_related=["contrato"],
     permitir_criar=False, papeis_escrita=["Financeiro", "Fiscal"],
 )
+
+
+@login_required
+@require_POST
+def situacao(request, pk):
+    from django.core.exceptions import ValidationError
+
+    exigir_escrita(request.user, ["Financeiro", "Fiscal"])
+    c = get_object_or_404(Contrato, pk=pk, empresa=request.empresa)
+    try:
+        services.alterar_situacao(c, request.POST.get("status", ""), request.POST.get("motivo", ""), request.user)
+    except ValidationError as erro:
+        messages.error(request, "; ".join(erro.messages))
+    else:
+        messages.success(request, "Contrato reativado: faturamento retomado." if c.status == "VIGENTE" else
+                         f"Contrato {c.get_status_display().lower()}: saiu das contagens e o faturamento foi pausado.")
+    return redirect(reverse("contratos:contrato_detalhe", args=[pk]))
 
 
 @login_required

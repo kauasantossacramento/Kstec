@@ -178,6 +178,11 @@ def status_badge(valor, entidade=None, rotulo=None):
 
 @register.simple_tag
 def badge_obj(obj, campo="status", entidade=None):
+    if "." in campo:
+        caminho, campo = campo.rsplit(".", 1)
+        obj = attr(obj, caminho)
+        if obj is None:
+            return "—"
     valor = getattr(obj, campo, None)
     display = getattr(obj, f"get_{campo}_display", None)
     return status_badge(valor, entidade or obj.__class__.__name__, display() if callable(display) else None)

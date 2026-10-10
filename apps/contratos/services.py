@@ -37,6 +37,27 @@ def gerar_competencias_vigentes(empresa=None) -> int:
     return sum(gerar_competencias(c) for c in qs)
 
 
+def alterar_situacao(contrato: Contrato, status: str, motivo: str, usuario=None) -> Contrato:
+    """Inativa (encerrado/suspenso/rescindido) ou reativa o contrato. Inativo: faturamento recorrente pausado,
+    fora das contagens, previsões e alertas; notas e recebíveis já emitidos permanecem."""
+    from django.core.exceptions import ValidationError
+
+    if status not in Contrato.Status.values or status == Contrato.Status.RASCUNHO:
+        raise ValidationError("Situação inválida.")
+    if status != Contrato.Status.VIGENTE and not motivo.strip():
+        raise ValidationError("Informe o motivo da inativação.")
+    contrato.status = status
+    contrato.motivo_situacao = (motivo.strip() or "Reativado")[:300]
+    contrato.save()
+    agenda = getattr(contrato, "agenda_faturamento", None)
+    if agenda is not None:
+        agenda.ativo = status == Contrato.Status.VIGENTE
+        if agenda.ativo:
+            agenda.ativa_desde = max(agenda.ativa_desde, timezone.localdate())
+        agenda.save()
+    return contrato
+
+
 def alertas_contrato(contrato: Contrato) -> list[dict]:
     """Avisos de vigência (90/60/30 dias) e saldo abaixo do limite (seção 2.2, item 5)."""
     alertas = []

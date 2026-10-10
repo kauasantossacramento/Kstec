@@ -37,7 +37,8 @@ def home(request):
     qs = CicloFaturamento.objects.filter(empresa=empresa).select_related("agenda__contrato__cliente", "nota")
     mes_ini = hoje.replace(day=1)
     mes_fim = previsao.ultimo_dia(mes_ini)
-    do_mes = qs.filter(data_emissao__range=(mes_ini, mes_fim)).exclude(status=S.PULADO)
+    do_mes = qs.filter(data_emissao__range=(mes_ini, mes_fim)).exclude(status=S.PULADO).filter(
+        Q(agenda__ativo=True) | Q(status__in=[S.AUTORIZADO, S.TRANSMITIDO]))
     agendas = AgendaFaturamento.objects.filter(empresa=empresa).select_related("contrato__cliente", "item_catalogo") \
         .annotate(autorizados=Count("ciclos", filter=Q(ciclos__status=S.AUTORIZADO)))
     linhas = [{"agenda": a, "proxima": ciclos.proxima_execucao(a) if a.ativo else None} for a in agendas]
@@ -51,9 +52,9 @@ def home(request):
     return render(request, "faturamento/home.html", {
         "kpi_mes": do_mes.aggregate(v=Sum("valor"))["v"] or 0,
         "kpi_emitidas": do_mes.filter(status=S.AUTORIZADO).count(), "kpi_total_mes": do_mes.count(),
-        "aguardando": qs.filter(status=S.AGUARDANDO).order_by("data_emissao"),
-        "problemas": qs.filter(status__in=[S.BLOQUEADO, S.FALHA]).order_by("data_emissao"),
-        "rascunhos": qs.filter(status=S.RASCUNHO), "transmitidos": qs.filter(status=S.TRANSMITIDO),
+        "aguardando": qs.filter(status=S.AGUARDANDO, agenda__ativo=True).order_by("data_emissao"),
+        "problemas": qs.filter(status__in=[S.BLOQUEADO, S.FALHA], agenda__ativo=True).order_by("data_emissao"),
+        "rascunhos": qs.filter(status=S.RASCUNHO, agenda__ativo=True), "transmitidos": qs.filter(status=S.TRANSMITIDO),
         "proximas": proximas, "linhas": linhas, "sem_agenda": sem_agenda, "hoje": hoje,
         "pode_escrever": pode_escrever(request.user, ["Fiscal", "Financeiro"]),
         "pode_transmitir": pode_escrever(request.user, ["Fiscal"]),
@@ -94,7 +95,9 @@ def _form_agenda(request, agenda=None):
         messages.success(request, ("Agenda criada" if agenda is None else "Agenda atualizada")
                          + f". {n} emissão(ões) programada(s) nos próximos 60 dias.")
         return redirect("faturamento:agenda", pk=obj.pk)
-    passo_erro = next((p["numero"] for p in form.passos() if p["erros"]), 1 if not form.non_field_errors() else 4)
+    pedido = request.GET.get("passo", "1")
+    passo_padrao = int(pedido) if pedido.isdigit() and 1 <= int(pedido) <= 4 else 1
+    passo_erro = next((p["numero"] for p in form.passos() if p["erros"]), passo_padrao if not form.non_field_errors() else 4)
     return render(request, "faturamento/agenda_form.html", {
         "form": form, "agenda": agenda, "contratos": contratos_json(request.empresa), "passo_inicial": passo_erro})
 

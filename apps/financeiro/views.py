@@ -19,7 +19,9 @@ from .services import lancamentos, relatorios
 PAPEIS = ["Financeiro", "Fiscal"]
 
 recorrencias = Crud(Recorrencia, "recorrencia", "financeiro", [Coluna("Descrição", "descricao", link=True),
-    Coluna("Frequência", "frequencia"), Coluna("Valor", "valor", "brl"), Coluna("Ativa", "ativo", "bool")],
+    Coluna("Tipo", "tipo"), Coluna("Frequência", "frequencia"), Coluna("Dia do vencimento", "dia", "mono"),
+    Coluna("Início", "inicio", "data"), Coluna("Fim", "fim", "data"), Coluna("Valor", "valor", "brl"),
+    Coluna("Ativa", "ativo", "bool")],
     feminino=True, caminho="recorrencias", form_class=RecorrenciaForm, papeis_escrita=["Financeiro"],
     papeis_leitura=PAPEIS, template_detalhe="financeiro/recorrencia.html")
 

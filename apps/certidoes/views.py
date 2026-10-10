@@ -6,6 +6,7 @@ from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
+from apps.core import contexto
 from apps.core.crud import Coluna, Crud, DetalheGenerico
 from apps.core.forms import FormKS
 from apps.core.permissoes import exigir_escrita, pode_escrever
@@ -24,7 +25,8 @@ class CertidaoForm(FormKS):
         super().__init__(*a, **kw)
         self.fields["data_emissao"].required = False
         self.fields["data_validade"].required = False
-        self.fields["arquivo"].help_text = "Envie o PDF: validade e código de controle são lidos automaticamente."
+        self.fields["arquivo"].help_text = "Envie o PDF: tipo, validade, número e situação são reconhecidos automaticamente."
+        self.fields["tipo"].required = False
         self.extraido = {}
 
     def clean(self):
@@ -33,13 +35,18 @@ class CertidaoForm(FormKS):
         if arq and hasattr(arq, "read") and (not d.get("data_validade") or not d.get("numero")):
             conteudo = arq.read()
             arq.seek(0)
-            self.extraido = services.extrair_dados(services.extrair_texto_pdf(conteudo))
+            self.extraido = services.reconhecer(conteudo, contexto.empresa_atual())
+            if not d.get("tipo") and self.extraido.get("tipo"):
+                d["tipo"] = self.extraido["tipo"]
+                self.instance.tipo = self.extraido["tipo"]
             for campo in ("data_validade", "data_emissao", "numero"):
                 if not d.get(campo) and self.extraido.get(campo):
                     d[campo] = self.extraido[campo]
                     self.instance.__dict__[campo] = self.extraido[campo]
             if self.extraido.get("situacao") and not self.data.get("situacao"):
                 d["situacao"] = self.extraido["situacao"]
+        if not d.get("tipo"):
+            self.add_error("tipo", "Não reconhecemos o tipo pelo PDF: escolha o tipo.")
         if not d.get("data_emissao"):
             d["data_emissao"] = timezone.localdate()
         if not d.get("data_validade"):
@@ -112,3 +119,31 @@ def gerar_kit(request, pk):
         messages.warning(request, a)
     messages.success(request, "Kit gerado.")
     return redirect(reverse("certidoes:kit_detalhe", args=[pk]))
+
+
+class VariosArquivos(forms.ClearableFileInput):
+    allow_multiple_selected = True
+
+
+class LoteForm(forms.Form):
+    arquivos = forms.FileField(label="PDFs das certidões", required=False,
+                               widget=VariosArquivos(attrs={"multiple": True, "accept": "application/pdf", "class": "input"}))
+
+
+@login_required
+def lote(request):
+    """Envio de vários PDFs: cada um é reconhecido e cadastrado automaticamente."""
+    resultados = []
+    if request.method == "POST":
+        exigir_escrita(request.user)
+        for arq in request.FILES.getlist("arquivos")[:30]:
+            if arq.size > 10_000_000:
+                resultados.append({"nome": arq.name, "cert": None, "msg": "Arquivo acima de 10 MB.", "dados": {}})
+                continue
+            cert, dados, msg = services.importar_pdf(request.empresa, arq.name, arq.read())
+            resultados.append({"nome": arq.name, "cert": cert, "msg": msg, "dados": dados})
+        if resultados:
+            ok = sum(1 for r in resultados if r["cert"])
+            messages.success(request, f"{ok} de {len(resultados)} certidão(ões) cadastrada(s) automaticamente.")
+    return render(request, "certidoes/lote.html", {"form": LoteForm(), "resultados": resultados,
+                                                   "pode_escrever": pode_escrever(request.user)})

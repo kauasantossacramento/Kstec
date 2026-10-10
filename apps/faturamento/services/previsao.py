@@ -81,7 +81,9 @@ def _ciclos(empresa, inicio, fim):
     com_recebivel = set(Lancamento.objects.filter(empresa=empresa, nota_fiscal__isnull=False)
                         .values_list("nota_fiscal_id", flat=True))
     qs = CicloFaturamento.objects.filter(empresa=empresa, data_vencimento__range=(inicio, fim)).exclude(
-        status=CicloFaturamento.Status.PULADO).select_related("agenda__contrato__cliente")
+        status=CicloFaturamento.Status.PULADO).filter(
+        Q(agenda__ativo=True, agenda__contrato__status=Contrato.Status.VIGENTE) | Q(nota__isnull=False)
+    ).select_related("agenda__contrato__cliente")
     for c in qs:
         if c.nota_id and c.nota_id in com_recebivel:
             continue

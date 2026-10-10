@@ -13,10 +13,35 @@
     {% block menu_adicionar %}{% for a in acoes_contrato %}<a href="{{ a.href }}">{{ a.rotulo }}</a>{% endfor %}{% endblock %}
   </div></div>
 <a class="btn" href="{{ url_editar }}">{% icone "edit" 16 %} Editar</a>
+{% if obj.status == "VIGENTE" %}
+<details class="dropdown" style="position:relative"><summary class="btn" style="list-style:none">{% icone "pause" 16 %} Inativar</summary>
+  <form method="post" action="{% url 'contratos:situacao' obj.pk %}" class="dropdown-menu stack" style="width:320px;padding:14px" data-confirmar="O contrato sai das contagens, previsões e alertas, e o faturamento recorrente é pausado. Notas e recebíveis já emitidos continuam." data-confirmar-titulo="Inativar contrato?" data-confirmar-botao="Inativar">{% csrf_token %}
+    <label class="small" for="sit-status"><strong>Nova situação</strong></label>
+    <select class="input select" id="sit-status" name="status">{% for v, r in situacoes_inativas %}<option value="{{ v }}">{{ r }}</option>{% endfor %}</select>
+    <label class="small" for="sit-motivo"><strong>Motivo</strong></label>
+    <input class="input" id="sit-motivo" name="motivo" required placeholder="Ex.: fim da vigência; rescisão amigável">
+    <button class="btn btn-perigo" type="submit">{% icone "pause" 16 %} Inativar contrato</button>
+  </form></details>
+{% else %}
+<form method="post" action="{% url 'contratos:situacao' obj.pk %}">{% csrf_token %}<input type="hidden" name="status" value="VIGENTE"><input type="hidden" name="motivo" value="Reativado"><button class="btn" type="submit">{% icone "play" 16 %} Reativar</button></form>
+{% endif %}
 {% endif %}
 {% endblock %}
 {% block conteudo %}
+{% if obj.status != "VIGENTE" %}<div class="alerta warning">{% icone "pause" 18 %}<div>Contrato <strong>{{ obj.get_status_display|lower }}</strong>{% if obj.motivo_situacao %} — {{ obj.motivo_situacao }}{% endif %}. Fora das contagens, previsões e do faturamento recorrente.</div></div>{% endif %}
 {% for a in alertas %}<div class="alerta {{ a.nivel }}">{% icone "alert" 18 %} {{ a.texto }}</div>{% endfor %}
+<section class="card" style="margin-bottom:16px;padding:14px 20px">
+  <div class="linha entre" style="gap:16px">
+    <div class="linha" style="gap:12px;flex-wrap:nowrap;min-width:0">
+      <span class="ico-bolha" style="width:36px;height:36px;border-radius:10px;display:grid;place-items:center;background:var(--primary-50);color:var(--brand);flex:none">{% icone "repeat" 18 %}</span>
+      <div style="min-width:0">{% if agenda %}
+        <strong>Emissão: todo dia {{ agenda.dia_emissao }}{% if agenda.dia_util %} (dia útil){% endif %} às {{ agenda.hora_emissao|time:"H:i" }}</strong>
+        <div class="small muted">Competência {% if agenda.referencia == "MES_ANTERIOR" %}do mês anterior{% else %}do próprio mês{% endif %} · vencimento {% if agenda.tipo_vencimento == "DIA_FIXO" %}todo dia {{ agenda.dia_vencimento }}{% else %}{{ agenda.prazo_dias }} dias após a emissão{% endif %} · {{ agenda.get_modo_display|lower }}{% if not agenda.ativo %} · <strong>pausado</strong>{% elif proxima_emissao %} · próxima em <strong>{{ proxima_emissao.emissao|data_br }}</strong>{% endif %}</div>
+      {% else %}<strong>Sem faturamento recorrente</strong><div class="small muted">Programe as datas de emissão e vencimento das notas deste contrato.</div>{% endif %}</div>
+    </div>
+    {% if pode_escrever %}{% if agenda %}<a class="btn btn-sm" href="{% url 'faturamento:agenda_editar' agenda.pk %}?passo=3">{% icone "calendar" 14 %} Alterar datas</a>{% elif obj.status == "VIGENTE" %}<a class="btn btn-sm btn-primario" href="{% url 'faturamento:agenda_nova' %}?contrato={{ obj.pk }}">{% icone "plus" 14 %} Programar emissão</a>{% endif %}{% endif %}
+  </div>
+</section>
 <div class="grid g-4" style="margin-bottom:16px">
   {% kpi_card "Valor atualizado" obj.valor_atualizado icone_nome="file-text" %}
   {% kpi_card "Faturado" obj.total_faturado icone_nome="receipt" %}

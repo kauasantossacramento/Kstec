@@ -11,13 +11,15 @@ from .views import (
                gerar_recebivel,
                notas,
                perfis,
+               receber,
 )
 
 app_name = "fiscal"
 urlpatterns = [path("configuracao/", configuracao, name="configuracao"),
                path("notas/<uuid:pk>/emitir/", emitir, name="emitir"),
                path("notas/<uuid:pk>/consultar/", consultar, name="consultar")]
-urlpatterns += [path("notas/<uuid:pk>/recebivel/", gerar_recebivel, name="gerar_recebivel")]
+urlpatterns += [path("notas/<uuid:pk>/recebivel/", gerar_recebivel, name="gerar_recebivel"),
+                path("notas/<uuid:pk>/receber/", receber, name="receber")]
 urlpatterns += [path("notas/<uuid:pk>/pdf/", views_entrega.pdf, name="pdf"),
                 path("notas/<uuid:pk>/entregas/", views_entrega.entregas, name="entregas"),
                 path("entregas/<uuid:pk>/", views_entrega.entrega_revisar, name="entrega_revisar"),

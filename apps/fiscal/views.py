@@ -4,6 +4,7 @@ from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.http import HttpResponseRedirect
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 from django.views.decorators.http import require_POST
 
 from apps.core.crud import Coluna, CriarGenerico, Crud, DetalheGenerico, EditarGenerico
@@ -19,12 +20,13 @@ notas = Crud(NotaFiscal, "nota", "fiscal", [
     Coluna("Nota / tomador", "tomador", link=True), Coluna("Número", "numero_nfse", "mono"), Coluna("Competência", "competencia", "data"),
     Coluna("Serviços", "valor_servicos", "brl"), Coluna("Líquido", "valor_liquido", "brl"),
     Coluna("Situação", "status", "status", entidade="NotaFiscal"),
+    Coluna("Recebimento", "recebivel.status", "status", entidade="Lancamento"),
 ], form_class=NotaForm, feminino=True, caminho="notas", papeis_escrita=["Fiscal", "Financeiro"],
     titulo="NFS-e", titulo_plural="Notas fiscais de serviço",
     papeis_leitura=["Fiscal", "Financeiro"],
     template_lista="fiscal/lista.html",
     template_detalhe="fiscal/detalhe.html",
-    busca=["tomador__razao_social", "discriminacao", "numero_nfse", "chave_acesso"], filtros=["status", "ambiente", "canal"], select_related=["tomador"],
+    busca=["tomador__razao_social", "discriminacao", "numero_nfse", "chave_acesso"], filtros=["status", "ambiente", "canal"], select_related=["tomador", "recebivel"],
     subtitulo="Rascunhos, transmissões e documentos autorizados, com consulta do resultado e recebíveis.",
     campos_detalhe=NotaForm.Meta.fields + ["base_calculo", "valor_iss", "valor_iss_retido", "valor_ir",
                                            "valor_inss", "valor_pis", "valor_cofins", "valor_csll", "valor_liquido",
@@ -64,6 +66,13 @@ class DetalheNota(DetalheGenerico):
         ctx["tentativas"] = self.object.tentativas.all()
         ctx["pode_entregar"] = request_pode_entregar(self.request.user)
         ctx["entregas"] = self.object.entregas.all()
+        from apps.core.permissoes import pode_escrever
+        from apps.financeiro.models import ContaBancaria, Lancamento
+
+        ctx["pode_receber"] = pode_escrever(self.request.user, ["Financeiro"])
+        ctx["formas"] = Lancamento.Forma.choices
+        ctx["forma_sugerida"] = "OB" if self.object.tomador.e_orgao_publico else "PIX"
+        ctx["contas"] = ContaBancaria.objects.filter(empresa=self.request.empresa, ativo=True)
         ctx["anexos"] = ctx["anexos"].filter(ativo=True)
         return ctx
 
@@ -157,3 +166,30 @@ def gerar_recebivel(request, pk):
     else:
         messages.success(request, "Recebível vinculado à nota, sem duplicação.")
     return redirect("fiscal:nota_detalhe", pk=pk)
+
+
+@login_required
+@require_POST
+def receber(request, pk):
+    """Confirma o recebimento da nota: baixa integral do recebível, sem sair da tela da NFS-e."""
+    from datetime import date
+
+    from apps.financeiro.models import ContaBancaria, Lancamento
+    from apps.financeiro.services.lancamentos import baixar
+
+    exigir_escrita(request.user, ["Financeiro"])
+    nota = get_object_or_404(NotaFiscal, pk=pk, empresa=request.empresa)
+    lanc = Lancamento.objects.filter(nota_fiscal=nota, empresa=request.empresa).first()
+    if lanc is None:
+        messages.error(request, "A nota não tem recebível no financeiro. Gere o recebível primeiro.")
+        return redirect("fiscal:nota_detalhe", pk=pk)
+    try:
+        conta = ContaBancaria.objects.filter(pk=request.POST.get("conta_bancaria") or None, empresa=request.empresa).first()
+        baixar(lanc, data_pagamento=date.fromisoformat(request.POST.get("data_pagamento", "")),
+               forma_pagamento=request.POST.get("forma_pagamento", ""), ordem_bancaria=request.POST.get("ordem_bancaria", ""),
+               conta_bancaria=conta)
+    except (ValidationError, ValueError) as erro:
+        messages.error(request, "; ".join(erro.messages) if isinstance(erro, ValidationError) else "Data inválida.")
+    else:
+        messages.success(request, f"Recebimento da NFS-e {nota.numero_nfse} registrado.")
+    return redirect(reverse("fiscal:nota_detalhe", args=[pk]) + "#recebimento")

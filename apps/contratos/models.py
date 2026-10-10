@@ -70,6 +70,8 @@ class Contrato(ModeloBase):
     exige_relatorio_sla = models.BooleanField("exige relatório de SLA", default=False)
     certidoes_exigidas = models.ManyToManyField("certidoes.TipoCertidao", blank=True, related_name="contratos")
     cor = models.CharField(max_length=7, default="#1E5BFF", help_text="Cor usada nos gráficos.")
+    motivo_situacao = models.CharField("motivo da situação", max_length=300, blank=True, editable=False,
+                                       help_text="Registrado ao inativar ou reativar o contrato.")
     responsaveis = models.ManyToManyField("core.Usuario", blank=True, related_name="contratos_alocados",
                                           help_text="Técnicos alocados (veem o contrato no papel Operação).")
 

@@ -18,17 +18,26 @@ from .models import Certidao, KitHabilitacao, TipoCertidao
 
 RE_DATA = r"(\d{2}/\d{2}/\d{4})"
 PADROES_VALIDADE = [
+    # FGTS: "Validade: 06/08/2026 a 04/09/2026" — a validade é a segunda data
+    re.compile(r"validade\s*:?\s*\d{2}/\d{2}/\d{4}\s+a\s+" + RE_DATA, re.I),
     re.compile(r"v[áa]lid[ao]\s+at[ée]\s*:?\s*" + RE_DATA, re.I),
     re.compile(r"validade\s*:?\s*" + RE_DATA, re.I),
     re.compile(r"v[áa]lida\s+por\s+\d+\s+dias.*?at[ée]\s*" + RE_DATA, re.I | re.S),
 ]
 PADROES_CODIGO = [
+    re.compile(r"certifica[çc][ãa]o\s+n[úu]mero\s*:?\s*([0-9]{10,})", re.I),
+    re.compile(r"certid[ãa]o\s+n[ºo°.]*\s*:\s*([0-9./\-]{5,})", re.I),
+    re.compile(r"D[ÉE]BITOS\s+FISCAIS\s+N[ºo°.]*\s*([0-9./\-]{4,})", re.I),
     re.compile(r"c[óo]digo\s+de\s+controle\s+da\s+certid[ãa]o\s*:?\s*([A-Z0-9.\-]{6,})", re.I),
     re.compile(r"c[óo]digo\s+de\s+controle\s*:?\s*([A-Z0-9.\-]{6,})", re.I),
     re.compile(r"certid[ãa]o\s+n[ºo°.]*\s*:?\s*([0-9./\-]{5,})", re.I),
     re.compile(r"autentica[çc][ãa]o\s*:?\s*([A-Z0-9.\-]{6,})", re.I),
 ]
 PADROES_EMISSAO = [
+    re.compile(r"validade\s*:?\s*" + RE_DATA + r"\s+a\s+\d{2}/\d{2}/\d{4}", re.I),
+    re.compile(r"anteriores\s+[àa]\s+data\s+de\s+" + RE_DATA, re.I),
+    re.compile(r"expedi[çc][ãa]o\s*:?\s*" + RE_DATA, re.I),
+    re.compile(r"data\s+de\s+emiss[ãa]o\s*:?\s*" + RE_DATA, re.I),
     re.compile(r"emitid[ao]\s+(?:às|as)\s+[\d:]+\s+do\s+dia\s+" + RE_DATA, re.I),
     re.compile(r"emiss[ãa]o\s*:?\s*" + RE_DATA, re.I),
     re.compile(r"emitid[ao]\s+em\s*:?\s*" + RE_DATA, re.I),
@@ -52,6 +61,62 @@ def extrair_texto_pdf(conteudo: bytes) -> str:
         return ""
 
 
+# Reconhecimento do tipo pelo conteúdo: (palavras que precisam aparecer, trecho do nome do TipoCertidao)
+TIPOS = [
+    (("DÉBITOS TRABALHISTAS",), "CNDT"),
+    (("FGTS",), "FGTS"),
+    (("FAZENDA NACIONAL",), "Federal"),
+    (("TRIBUTOS FEDERAIS",), "Federal"),
+    (("TRIBUNAL DE CONTAS DA UNIÃO",), "TCU"),
+    (("CONSULTA CONSOLIDADA",), "TCU"),
+    (("FALÊNCIA",), "Falência"),
+    (("RECUPERAÇÃO JUDICIAL",), "Falência"),
+    (("CERTIDÃO SIMPLIFICADA",), "Simplificada"),
+    (("CÓDIGO TRIBUTÁRIO DO ESTADO",), "Estadual"),
+    (("SECRETARIA DA FAZENDA", "ESTADO"), "Estadual"),
+    (("RECEITA MUNICIPAL",), "Débitos Municipais"),
+    (("DÉBITOS FISCAIS", "MUNICÍPIO"), "Débitos Municipais"),
+    (("ALVARÁ",), "Alvará"),
+]
+
+
+def reconhecer_tipo(texto: str, empresa=None):
+    t = texto.upper()
+    for palavras, nome in TIPOS:
+        if all(p in t for p in palavras):
+            qs = TipoCertidao.objects.filter(nome__icontains=nome, ativo=True)
+            if empresa is not None:
+                qs = qs.filter(empresa=empresa)
+            tipo = qs.first()
+            if tipo:
+                return tipo
+    return None
+
+
+def validade_em_dias(texto: str):
+    m = re.search(r"validade\s*:?\s*(\d{1,3})\s*dias", texto, re.I) or         re.search(r"v[áa]lida\s+por\s+(\d{1,3})\s*(?:\(|dias)", texto, re.I)
+    return int(m.group(1)) if m else None
+
+
+def reconhecer(conteudo: bytes, empresa=None) -> dict:
+    """Lê o PDF e devolve tipo, número, emissão, validade e situação (o que conseguir identificar)."""
+    texto = extrair_texto_pdf(conteudo)
+    dados = extrair_dados(texto)
+    dados["tipo"] = reconhecer_tipo(texto, empresa)
+    dias = validade_em_dias(texto)
+    if not dados.get("data_validade") and dados.get("data_emissao"):
+        if dias:
+            dados["data_validade"] = dados["data_emissao"] + timezone.timedelta(days=dias)
+            dados["validade_origem"] = f"{dias} dias informados na certidão"
+        elif dados["tipo"]:
+            dados["data_validade"] = dados["data_emissao"] + timezone.timedelta(days=dados["tipo"].validade_padrao_dias)
+            dados["validade_origem"] = f"estimada pela validade padrão ({dados['tipo'].validade_padrao_dias} dias)"
+    elif dados.get("data_validade"):
+        dados["validade_origem"] = "lida na certidão"
+    dados["texto_lido"] = bool(texto.strip())
+    return dados
+
+
 def extrair_dados(texto: str) -> dict:
     """Pré-preenche validade, emissão, código de controle e situação a partir do texto do PDF."""
     dados = {}
@@ -67,7 +132,7 @@ def extrair_dados(texto: str) -> dict:
             break
     for p in PADROES_CODIGO:
         m = p.search(texto)
-        if m:
+        if m and any(c.isdigit() for c in m.group(1)):
             dados["numero"] = m.group(1).strip(" .")
             break
     t = texto.upper()
@@ -75,7 +140,7 @@ def extrair_dados(texto: str) -> dict:
         dados["situacao"] = Certidao.Situacao.POSITIVA_COM_EFEITO_NEGATIVA
     elif "CERTIDÃO POSITIVA" in t or "CERTIDAO POSITIVA" in t:
         dados["situacao"] = Certidao.Situacao.POSITIVA
-    elif "NEGATIVA" in t:
+    elif "NEGATIVA" in t or "NÃO CONSTAR" in t or "NADA CONSTA" in t or             ("FGTS" in t and "REGULAR" in t and "IRREGULAR" not in t):
         dados["situacao"] = Certidao.Situacao.NEGATIVA
     return dados
 
@@ -186,3 +251,27 @@ def _atencao_certidoes(empresa, usuario):
                 reverse("certidoes:home"), "danger" if venc else "warning", 10 if venc else 20,
                 f"Validade {c.data_validade:%d/%m/%Y}" if c else "", "shield"))
     return itens
+
+
+def importar_pdf(empresa, nome, conteudo):
+    """Reconhece e cadastra uma certidão a partir do PDF. Retorna (certidao | None, dados, mensagem)."""
+    from django.core.files.base import ContentFile
+
+    if not conteudo.startswith(b"%PDF"):
+        return None, {}, "Não é um PDF."
+    dados = reconhecer(conteudo, empresa)
+    tipo = dados.get("tipo")
+    if tipo is None:
+        return None, dados, "Tipo de certidão não reconhecido — envie pelo formulário escolhendo o tipo."
+    if not dados.get("data_validade"):
+        return None, dados, "Validade não encontrada no PDF — envie pelo formulário."
+    numero = dados.get("numero", "")
+    if numero and Certidao.objects.filter(empresa=empresa, tipo=tipo, numero=numero, ativo=True).exists():
+        return None, dados, "Já cadastrada (mesmo tipo e número)."
+    cert = Certidao(empresa=empresa, tipo=tipo, numero=numero, data_emissao=dados.get("data_emissao") or timezone.localdate(),
+                    data_validade=dados["data_validade"], situacao=dados.get("situacao") or Certidao.Situacao.NEGATIVA,
+                    codigo_autenticidade=numero,
+                    observacao=f"Dados lidos automaticamente do PDF ({dados.get('validade_origem', '')}). Confira.")
+    cert.arquivo.save(nome, ContentFile(conteudo), save=False)
+    cert.save()
+    return cert, dados, "Cadastrada."

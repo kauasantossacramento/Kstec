@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block titulo %}Enviar certidões{% endblock %}
+{% block breadcrumb %}{% icone "chevron-right" 14 %}<a href="{% url 'certidoes:home' %}">Certidões</a>{% icone "chevron-right" 14 %}<span class="atual">Enviar PDFs</span>{% endblock %}
+{% block h1 %}Enviar certidões{% endblock %}
+{% block subtitulo %}<p class="sub">Selecione um ou vários PDFs. Cada certidão é reconhecida e cadastrada automaticamente.</p>{% endblock %}
+{% block conteudo %}
+<div class="grid g-2-1">
+  <div class="stack">
+    {% if pode_escrever %}
+    <form method="post" enctype="multipart/form-data" class="card stack">{% csrf_token %}
+      <label for="id_arquivos"><strong>PDFs das certidões</strong></label>
+      {{ form.arquivos }}
+      <p class="xs muted" style="margin:0">Até 30 arquivos por vez, 10 MB cada. Reconhece: CND Federal, CNDT, CRF/FGTS, Estadual (SEFAZ), Municipal, Falência, TCU e Certidão Simplificada.</p>
+      <div><button class="btn btn-primario" type="submit">{% icone "upload" 16 %} Enviar e reconhecer</button></div>
+    </form>
+    {% endif %}
+    {% if resultados %}
+    <div class="tabela-wrap responsiva"><table class="tabela">
+      <thead><tr><th>Arquivo</th><th>Reconhecido como</th><th>Nº</th><th>Emissão</th><th>Validade</th><th>Resultado</th></tr></thead>
+      <tbody>{% for r in resultados %}<tr>
+        <td data-rotulo="Arquivo" class="small">{{ r.nome|truncatechars:40 }}</td>
+        <td data-rotulo="Tipo">{{ r.dados.tipo|default:"—" }}<br><span class="xs muted">{{ r.dados.situacao|default:"" }}</span></td>
+        <td data-rotulo="Nº" class="mono small">{{ r.dados.numero|default:"—" }}</td>
+        <td data-rotulo="Emissão">{{ r.dados.data_emissao|data_br|default:"—" }}</td>
+        <td data-rotulo="Validade">{{ r.dados.data_validade|data_br|default:"—" }}<br><span class="xs muted">{{ r.dados.validade_origem|default:"" }}</span></td>
+        <td data-rotulo="Resultado">{% if r.cert %}{% status_badge "success" rotulo="Cadastrada" %} <a class="small" href="{% url 'certidoes:certidao_editar' r.cert.pk %}">conferir</a>{% else %}{% status_badge "warning" rotulo="Não cadastrada" %}<br><span class="xs">{{ r.msg }}</span>{% endif %}</td>
+      </tr>{% endfor %}</tbody>
+    </table></div>
+    {% endif %}
+  </div>
+  <aside class="card">
+    <h3>{% icone "shield" 16 %} Como funciona</h3>
+    <p class="small muted">O texto do PDF é lido no servidor. Quando a certidão não informa a validade, ela é calculada pelos dias impressos (ex.: “30 dias”) ou pela validade padrão do tipo — sempre indicado na coluna Validade. Certidões repetidas (mesmo tipo e número) são ignoradas.</p>
+    <p class="small muted">PDFs escaneados (imagem) não têm texto: use o formulário individual.</p>
+  </aside>
+</div>
+{% endblock %}
