@@ -94,7 +94,7 @@ def test_envio_avulso_pdf_xml_simulado_e_sem_repeticao(nota_autorizada, pdf_rapi
     envio = entregas.enviar_entrega(envio)
     assert envio.status == "SIMULADA" and envio.enviado_em
     assert len(mail.outbox) == 1
-    assert {a.mimetype for a in mail.outbox[0].attachments} == {"application/pdf", "application/xml"}
+    assert {a.mimetype for a in mail.outbox[0].attachments} == {"application/pdf"}
     with pytest.raises(ValidationError):
         entregas.enviar_entrega(envio)
     assert len(mail.outbox) == 1
@@ -105,7 +105,7 @@ def test_pacote_contratual_completo_e_formula_bdi(pacote_contrato):
     envio = preparar(nota)
     with zipfile.ZipFile(io.BytesIO(envio.pacote.ler())) as pacote:
         nomes = pacote.namelist()
-        assert "kit_certidoes.zip" in nomes and rel.pdf.nome in nomes and plan.xlsx.nome in nomes and plan.pdf.nome in nomes
+        assert "kit_certidoes.zip" in nomes and rel.pdf.nome in nomes and plan.xlsx.nome not in nomes and plan.pdf.nome in nomes
         manifesto = json.loads(pacote.read("manifesto.json"))
         assert manifesto["certidoes"][0]["id"] == str(cert.pk)
         with zipfile.ZipFile(io.BytesIO(pacote.read("kit_certidoes.zip"))) as kit:
@@ -119,7 +119,10 @@ def test_pacote_contratual_completo_e_formula_bdi(pacote_contrato):
     assert plan.itens.get().valor_mensal == Decimal("10.00")
     assert abs(plan.bdi - Decimal(6)/94) < Decimal("0.00000001")
     entregas.enviar_entrega(envio)
-    assert len(mail.outbox[0].attachments) == 1 and mail.outbox[0].attachments[0].mimetype == "application/zip"
+    anexos = {a.filename: a.mimetype for a in mail.outbox[0].attachments}
+    assert set(anexos.values()) == {"application/pdf"} and "00_indice_do_pacote.pdf" in anexos
+    assert rel.pdf.nome in anexos and plan.pdf.nome in anexos and "certidoes_00_indice.pdf" in anexos
+    assert not any(n.endswith((".zip", ".json", ".xml", ".xlsx")) for n in anexos)
 
 
 def test_certidao_expirada_apos_preparo_bloqueia_envio(pacote_contrato):

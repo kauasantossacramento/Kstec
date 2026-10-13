@@ -93,10 +93,13 @@ def arquivos_documentos(docs):
     if docs["relatorio"]:
         arquivos.append((docs["relatorio"].pdf.nome, docs["relatorio"].pdf.ler()))
     if docs["planilha"]:
-        arquivos += [(docs["planilha"].xlsx.nome, docs["planilha"].xlsx.ler()), (docs["planilha"].pdf.nome, docs["planilha"].pdf.ler())]
+        # Ao cliente vai só o PDF assinado; o XLSX é de uso interno.
+        arquivos.append((docs["planilha"].pdf.nome, docs["planilha"].pdf.ler()))
     if docs["sla"]:
         arquivos.append((docs["sla"].pdf.nome, docs["sla"].pdf.ler()))
     for doc in docs["enviados"]:
+        if doc.tipo == "CONTRATO":
+            continue  # o contrato o cliente já possui; fica só no arquivo do sistema
         if (doc.tipo == "RELATORIO_ATIVIDADES" and docs["relatorio"]) or (doc.tipo == "PLANILHA_CUSTOS" and docs["planilha"])                 or (doc.tipo == "RELATORIO_SLA" and docs["sla"]):
             continue  # o documento aprovado no sistema prevalece
         arquivos.append((doc.anexo.nome, doc.anexo.ler()))
@@ -187,6 +190,22 @@ def revalidar_entrega(entrega):
                     raise ValidationError("Uma certidão foi alterada após montar o pacote.")
 
 
+def anexos_email(dados):
+    """PDFs do pacote, um a um (o kit de certidões é aberto), para anexar ao e-mail sem zip.
+    XML, XLSX e manifesto ficam no pacote arquivado (baixável na tela da nota)."""
+    saida = []
+    with zipfile.ZipFile(io.BytesIO(dados)) as z:
+        for info in z.infolist():
+            nome = info.filename
+            if nome.endswith(".zip"):
+                prefixo = nome[:-4].replace("kit_", "")
+                with zipfile.ZipFile(io.BytesIO(z.read(nome))) as interno:
+                    saida += [(f"{prefixo}_{i.filename}", interno.read(i.filename)) for i in interno.infolist()]
+                continue
+            saida.append(("00_indice_do_pacote.pdf" if nome == "00_indice.pdf" else nome, z.read(nome)))
+    return [(n, c, "application/pdf") for n, c in saida if n.lower().endswith(".pdf")]
+
+
 def enviar_entrega(entrega):
     with transaction.atomic():
         atual = EntregaNota.objects.select_for_update(of=("self",)).select_related("nota__contrato", "pacote").get(pk=entrega.pk)
@@ -202,13 +221,8 @@ def enviar_entrega(entrega):
 
     conexao_smtp, remetente, copia = conexao("DOCUMENTOS", atual.empresa)
     mail = EmailMessage(atual.assunto, atual.mensagem, remetente, atual.destinatarios, bcc=copia, connection=conexao_smtp)
-    if atual.nota.contrato_id:
-        mail.attach(atual.pacote.nome, dados, "application/zip")
-    else:
-        with zipfile.ZipFile(io.BytesIO(dados)) as z:
-            for info in z.infolist():
-                if info.filename.endswith((".pdf", ".xml")):
-                    mail.attach(info.filename, z.read(info.filename), "application/pdf" if info.filename.endswith(".pdf") else "application/xml")
+    for nome, conteudo, tipo in anexos_email(dados):
+        mail.attach(nome, conteudo, tipo)
     try:
         enviados = mail.send(fail_silently=False)
         if enviados != 1:
