@@ -142,8 +142,13 @@ def preparar_entrega(nota, destinatarios, assunto, mensagem):
         raise ValidationError("Mensagem acima de 10.000 caracteres.")
     # Cheque os requisitos antes de renderizar ou arquivar um pacote.
     documentos = documentos_contrato(nota) if nota.contrato_id else None
+    from apps.core.services.assinatura import assinar_se_possivel, esta_assinado
+
+    def assinar(conteudo, motivo, ancora=None):
+        return conteudo if esta_assinado(conteudo) else assinar_se_possivel(conteudo, nota.empresa, motivo, ancora)[0]
     pdf = garantir_pdf(nota)
-    arquivos = [(pdf.nome, pdf.ler()), (f"nfse_{nota.numero_nfse}.xml", nota.xml_autorizado.ler())]
+    arquivos = [(pdf.nome, assinar(pdf.ler(), f"DANFSe {nota.numero_nfse}", ancora="")),
+                (f"nfse_{nota.numero_nfse}.xml", nota.xml_autorizado.ler())]
     manifesto = {"nota": str(nota.pk), "contrato": str(nota.contrato_id) if nota.contrato_id else None,
                  "competencia": str(nota.competencia.replace(day=1)), "certidoes": []}
     descricoes = {pdf.nome: f"Nota Fiscal de Serviço eletrônica nº {nota.numero_nfse} (DANFSe)"}
@@ -162,7 +167,8 @@ def preparar_entrega(nota, destinatarios, assunto, mensagem):
                                                f"válida até {cert.data_validade:%d/%m/%Y}")
             manifesto["certidoes"].append({"id": str(cert.pk), "tipo": str(cert.tipo_id), "nome": cert.tipo.nome,
                                           "validade": str(cert.data_validade), "sha256": hashlib.sha256(dados).hexdigest()})
-        indice_cert = renderizar_pdf("pdf/certidoes_entrega.html", {"nota": nota, "certidoes": certs, "empresa": nota.empresa})
+        indice_cert = assinar(renderizar_pdf("pdf/certidoes_entrega.html", {"nota": nota, "certidoes": certs,
+                                                                             "empresa": nota.empresa}), "Relação de certidões")
         arquivos.append(("kit_certidoes.zip", zip_bytes([("00_indice.pdf", indice_cert), *cert_arquivos])))
         descricoes["certidoes_00_indice.pdf"] = "Relação das certidões de regularidade vigentes"
         manifesto.update(ids_documentos(documentos))
@@ -171,8 +177,8 @@ def preparar_entrega(nota, destinatarios, assunto, mensagem):
         # O índice lista exatamente os PDFs que seguem anexos ao e-mail (ver anexos_email).
         itens = [{"arquivo": n, "descricao": descricoes.get(n, n)}
                  for n, _, _ in anexos_email(zip_bytes(arquivos))]
-        arquivos.insert(0, ("00_indice.pdf", renderizar_pdf("pdf/pacote_entrega.html", {"nota": nota,
-                                     "itens": itens, "empresa": nota.empresa})))
+        arquivos.insert(0, ("00_indice.pdf", assinar(renderizar_pdf("pdf/pacote_entrega.html", {
+            "nota": nota, "itens": itens, "empresa": nota.empresa}), "Índice de documentos")))
     arquivos.append(("manifesto.json", json.dumps(manifesto, ensure_ascii=False, indent=2).encode("utf-8")))
     pacote = Anexo.criar(nota, f"pacote_nfse_{nota.numero_nfse}.zip", zip_bytes(arquivos), retencao_anos=5)
     return EntregaNota.objects.create(empresa=nota.empresa, nota=nota, destinatarios=destinos,

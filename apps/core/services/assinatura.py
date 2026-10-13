@@ -85,9 +85,54 @@ def titular_padrao(empresa):
     return cert.subject.get_attributes_for_oid(NameOID.COMMON_NAME)[0].value
 
 
-def assinar_pdf(pdf: bytes, empresa, motivo="Documento aprovado no KS CENTRAL", local="Valença/BA"):
-    """Retorna (pdf_assinado, titular). Levanta ValidationError se não houver certificado utilizável."""
+def localizar_ancora(pdf: bytes, texto: str):
+    """(página, x, y) da última ocorrência de `texto` no PDF (coordenadas PDF), ou None."""
+    from pypdf import PdfReader
+
+    if not texto:
+        return None
+    try:
+        leitor = PdfReader(io.BytesIO(pdf))
+    except Exception:  # noqa: BLE001
+        return None
+    for indice in range(len(leitor.pages) - 1, -1, -1):
+        achados = []
+
+        def visitor(t, cm, tm, _fonte, _tamanho, achados=achados):
+            if texto in (t or ""):
+                # posição real = tm × cm (WeasyPrint escala via cm)
+                x = tm[4] * cm[0] + tm[5] * cm[2] + cm[4]
+                y = tm[4] * cm[1] + tm[5] * cm[3] + cm[5]
+                achados.append((x, y))
+        leitor.pages[indice].extract_text(visitor_text=visitor)
+        if achados:
+            x, y = min(achados, key=lambda p: p[1])  # a mais baixa da página: o bloco de assinatura
+            return indice, x, y
+    return None
+
+
+def caixa_carimbo(pdf: bytes, ancora: str):
+    """Retângulo do carimbo visível, centrado na página e logo acima do nome da empresa."""
+    from pypdf import PdfReader
+
+    achado = localizar_ancora(pdf, ancora)
+    if not achado:
+        return None
+    pagina, _x, y = achado
+    largura_pagina = float(PdfReader(io.BytesIO(pdf)).pages[pagina].mediabox.width)
+    largura, altura = 250, 46
+    x1 = (largura_pagina - largura) / 2
+    return pagina, (round(x1), round(y + 20), round(x1 + largura), round(y + 20 + altura))
+
+
+def assinar_pdf(pdf: bytes, empresa, motivo="Documento aprovado no KS CENTRAL", local="Valença/BA", ancora=None):
+    """Retorna (pdf_assinado, titular). Levanta ValidationError se não houver certificado utilizável.
+
+    Com `ancora` (padrão: razão social da empresa) encontrada no PDF, a assinatura fica visível em um carimbo
+    logo acima do nome; senão, é aplicada sem aparência visual (continua válida)."""
+    from pyhanko import stamp
     from pyhanko.pdf_utils.incremental_writer import IncrementalPdfFileWriter
+    from pyhanko.pdf_utils.text import TextBoxStyle
     from pyhanko.sign import fields, signers
 
     dados = credencial(empresa)
@@ -98,16 +143,33 @@ def assinar_pdf(pdf: bytes, empresa, motivo="Documento aprovado no KS CENTRAL", 
     titular = cert.subject.get_attributes_for_oid(NameOID.COMMON_NAME)[0].value
     signer = signers.SimpleSigner.load_pkcs12_data(pfx, other_certs=[], passphrase=senha.encode())
     escritor = IncrementalPdfFileWriter(io.BytesIO(pdf))
-    meta = signers.PdfSignatureMetadata(field_name="AssinaturaKSCENTRAL", md_algorithm="sha256", reason=motivo,
+    nome_campo = "AssinaturaKSCENTRAL"
+    existentes = 0
+    try:
+        from pyhanko.sign.fields import enumerate_sig_fields
+
+        existentes = sum(1 for _ in enumerate_sig_fields(escritor.prev))
+    except Exception:  # noqa: BLE001
+        pass
+    if existentes:
+        nome_campo += str(existentes + 1)
+    meta = signers.PdfSignatureMetadata(field_name=nome_campo, md_algorithm="sha256", reason=motivo,
                                         location=local, name=titular, subfilter=fields.SigSeedSubFilter.PADES)
-    saida = signers.sign_pdf(escritor, meta, signer=signer)
+    caixa = caixa_carimbo(pdf, ancora if ancora is not None else getattr(empresa, "razao_social", ""))
+    estilo = None
+    if caixa:
+        fields.append_signature_field(escritor, fields.SigFieldSpec(nome_campo, on_page=caixa[0], box=caixa[1]))
+        estilo = stamp.TextStampStyle(
+            stamp_text="Assinado digitalmente por\n%(signer)s\nData: %(ts)s\nVerifique em validar.iti.gov.br",
+            text_box_style=TextBoxStyle(font_size=7), border_width=1, timestamp_format="%d/%m/%Y %H:%M:%S %z")
+    saida = signers.PdfSigner(meta, signer=signer, stamp_style=estilo).sign_pdf(escritor)
     return saida.getvalue(), titular
 
 
-def assinar_se_possivel(pdf: bytes, empresa, motivo="Documento aprovado no KS CENTRAL"):
+def assinar_se_possivel(pdf: bytes, empresa, motivo="Documento aprovado no KS CENTRAL", ancora=None):
     """Assina quando houver certificado; caso contrário devolve o PDF original. Retorna (pdf, titular|None)."""
     try:
-        return assinar_pdf(pdf, empresa, motivo)
+        return assinar_pdf(pdf, empresa, motivo, ancora=ancora)
     except ValidationError:
         return pdf, None
 

@@ -1,0 +1,10 @@
+{% comment %}Bloco de assinatura comum. A área .area-assinatura fica livre para o carimbo da assinatura digital
+(PAdES visível), posicionado pelo serviço de assinatura logo acima do nome da empresa.{% endcomment %}
+<div class="assinatura" style="page-break-inside: avoid">
+  <div class="area-assinatura">{% if previa %}<span class="muted" style="font-size:8pt">(espaço da assinatura digital)</span>{% endif %}</div>
+  <div class="linha"></div>
+  <strong>{{ empresa.razao_social }}</strong><br>
+  CNPJ {{ empresa.cnpj_formatado }}{% if empresa.responsavel_tecnico %} · Responsável: {{ empresa.responsavel_tecnico }}{% endif %}<br>
+  <span class="muted">Valença – BA, {% if data_documento %}{{ data_documento|date:"j \d\e F \d\e Y" }}{% else %}{% now "j \d\e F \d\e Y" %}{% endif %}</span>
+  {% if aprovacao %}<div class="muted" style="font-size:8pt;margin-top:4pt">{{ aprovacao }}</div>{% endif %}
+</div>

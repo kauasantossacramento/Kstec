@@ -165,3 +165,37 @@ def test_ajuste_pela_tela_com_propagacao(cli, agenda):
         "valor": "2050,00", "data_emissao": "2026-10-22", "data_vencimento": "2026-11-21", "discriminacao": "",
         "propagar": "1"})
     assert emissoes(agenda)[11] == date(2026, 11, 22) and emissoes(agenda)[12] == date(2027, 1, 5)
+
+
+def test_rascunhos_automaticos_da_competencia(agenda, empresa, admin_user):
+    from apps.financeiro.models import PlanilhaCustos
+    from apps.financeiro.services.custos import PARAMETROS, nova_planilha, salvar_planilha
+    from apps.operacao.models import RelatorioAtividades
+
+    contrato = agenda.contrato
+    contrato.exige_relatorio_atividades = True
+    contrato.save()
+    base = nova_planilha(contrato, date(2026, 9, 1))
+    dados = dict.fromkeys(PARAMETROS, Decimal(0)) | {"observacoes": "x"}
+    linhas = [{"grupo": "INFRAESTRUTURA", "descricao": "Servidor", "unidade": "mês", "quantidade": Decimal(1),
+               "valor_unitario": Decimal(600), "rateio_pct": Decimal(100), "periodicidade": "MENSAL", "fonte": "Fatura"}]
+    salvar_planilha(base, dados | {"modelo": "LRF"}, linhas, admin_user, aprovar=False)
+    PlanilhaCustos.objects.filter(pk=base.pk).update(status="APROVADO")
+    ciclo = CicloFaturamento.objects.get(agenda=agenda, competencia=date(2026, 10, 1))
+    assert ciclos.preparar_documentos(ciclo) == ["relatório de atividades", "planilha de custos"]
+    nova = PlanilhaCustos.objects.get(contrato=contrato, competencia=date(2026, 10, 1))
+    assert nova.status == "RASCUNHO" and nova.itens.get().valor_mensal == Decimal("600.00")
+    assert RelatorioAtividades.objects.filter(contrato=contrato, competencia=date(2026, 10, 1), status="RASCUNHO").exists()
+    assert ciclos.preparar_documentos(ciclo) == []  # idempotente
+
+
+def test_carimbo_localiza_nome_da_empresa(empresa, monkeypatch):
+    from apps.core.services import assinatura as srv
+
+    monkeypatch.setattr(srv, "localizar_ancora", lambda pdf, texto: (0, 100.0, 200.0) if texto else None)
+    pagina, caixa = srv.caixa_carimbo(pdf_minimo(), "KS TEC")
+    assert pagina == 0 and caixa[1] > 200 and caixa[3] - caixa[1] == 46
+    assert srv.caixa_carimbo(pdf_minimo(), "") is None
+    assinatura.cadastrar(empresa, pfx_sintetico(), SENHA, "EMPRESA")
+    pdf, _ = assinatura.assinar_pdf(pdf_minimo(), empresa, "Teste", ancora="KS TEC")
+    assert assinatura.esta_assinado(pdf)

@@ -30,6 +30,21 @@ def nova_planilha(contrato, competencia):
     return PlanilhaCustos.objects.create(empresa=contrato.empresa, contrato=contrato, competencia=competencia, versao=versao)
 
 
+@transaction.atomic
+def clonar_planilha(origem, competencia):
+    """Rascunho da competência copiando modelo, parâmetros e itens da planilha aprovada anterior."""
+    nova = nova_planilha(origem.contrato, competencia)
+    for campo in (*PARAMETROS, "modelo"):
+        setattr(nova, campo, getattr(origem, campo))
+    nova.observacoes = f"Competência {nova.competencia:%m/%Y}. Base: planilha aprovada de {origem.competencia:%m/%Y}."
+    nova.save()
+    for item in origem.itens.all():
+        ItemCusto.objects.create(empresa=nova.empresa, planilha=nova, grupo=item.grupo, descricao=item.descricao,
+                                 unidade=item.unidade, quantidade=item.quantidade, valor_unitario=item.valor_unitario,
+                                 rateio_pct=item.rateio_pct, periodicidade=item.periodicidade, fonte=item.fonte)
+    return nova
+
+
 def texto_seguro(valor):
     # Conteúdo cadastrado é texto, não fórmula executável no Excel.
     return "'" + valor if valor.startswith(("=", "+", "-", "@")) else valor

@@ -17,5 +17,5 @@
   <tfoot><tr><td>VALOR TOTAL DA NOTA FISCAL</td><td class="num">100,00%</td><td class="num">{{ total|floatformat:2 }}</td><td></td></tr></tfoot>
 </table>
 {% if planilha.observacoes %}<h3>Observações</h3>{{ planilha.observacoes|linebreaks }}{% endif %}
-<div class="assinatura"><div class="linha"></div>{{ empresa.razao_social }} · CNPJ {{ empresa.cnpj_formatado }}<br><span class="muted">Valença – BA, {% now "j \d\e F \d\e Y" %}</span></div>
+{% with data_documento=planilha.aprovado_em %}{% include "pdf/_assinatura.html" %}{% endwith %}
 {% endblock %}

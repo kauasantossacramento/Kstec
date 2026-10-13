@@ -13,5 +13,5 @@
 <h2>Metodologia</h2>
 <p>Verificação automática HTTP a intervalos regulares pelo monitoramento da KS TEC. Disponibilidade = verificações bem-sucedidas ÷ verificações realizadas no mês. Incidente = falhas consecutivas acima do limite configurado, encerrado na primeira verificação bem-sucedida.</p>
 {% if relatorio.observacoes %}<h2>Observações</h2>{{ relatorio.observacoes|linebreaks }}{% endif %}
-<div class="assinatura">Revisado e aprovado no sistema por {{ relatorio.aprovado_por }} em {{ relatorio.aprovado_em|date:"d/m/Y H:i" }}.<br>{{ empresa.razao_social }} · {{ empresa.cnpj_formatado }}</div>
+{% with data_documento=relatorio.aprovado_em %}{% include "pdf/_assinatura.html" %}{% endwith %}
 {% endblock %}

@@ -180,6 +180,7 @@ def _preparar(pk, usuario, manual):
             if ciclo.nota_id is None:
                 ciclo.nota = criar_rascunho(ciclo, config)
                 ciclo.registrar("rascunho", "Rascunho da NFS-e calculado e salvo.", usuario)
+                transaction.on_commit(lambda: preparar_documentos(ciclo))
             elif ciclo.nota.status == NotaFiscal.Status.REJEITADA:
                 raise ValidationError("A nota anterior foi rejeitada. Use “Refazer nota” após corrigir a causa.")
             if ciclo.agenda.modo == AgendaFaturamento.Modo.RASCUNHO:
@@ -203,6 +204,38 @@ def _preparar(pk, usuario, manual):
             return ciclo, False
         ciclo.save()
         return ciclo, True
+
+
+def preparar_documentos(ciclo):
+    """Deixa prontos, em rascunho, o relatório de atividades (base: previstas + tarefas) e a planilha de custos
+    (cópia da última aprovada) da competência. Aprovar e assinar continua sendo decisão humana."""
+    from apps.financeiro.models import PlanilhaCustos
+    from apps.financeiro.services.custos import clonar_planilha
+    from apps.operacao.models import RelatorioAtividades
+    from apps.operacao.relatorios import novo_relatorio
+
+    contrato = ciclo.agenda.contrato
+    if not contrato.exige_relatorio_atividades:
+        return []
+    feitos = []
+    try:
+        if not RelatorioAtividades.objects.filter(contrato=contrato, competencia=ciclo.competencia, ativo=True).exists():
+            novo_relatorio(contrato, ciclo.competencia)
+            feitos.append("relatório de atividades")
+        if not PlanilhaCustos.objects.filter(contrato=contrato, competencia=ciclo.competencia, ativo=True).exists():
+            base = PlanilhaCustos.objects.filter(contrato=contrato, status="APROVADO", ativo=True,
+                                                 competencia__lt=ciclo.competencia).order_by("-competencia", "-versao").first()
+            if base:
+                clonar_planilha(base, ciclo.competencia)
+                feitos.append("planilha de custos")
+    except Exception as erro:  # noqa: BLE001 — documentos são complementares à nota
+        feitos.append(f"falha ao preparar documentos: {str(erro)[:150]}")
+    if feitos:
+        with transaction.atomic():
+            atual = CicloFaturamento.objects.select_for_update().get(pk=ciclo.pk)
+            atual.registrar("documentos", "Rascunho pronto para revisão e assinatura: " + ", ".join(feitos) + ".")
+            atual.save()
+    return feitos
 
 
 def resumo(ciclo):
