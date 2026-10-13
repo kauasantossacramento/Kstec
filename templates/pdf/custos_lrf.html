@@ -1,0 +1,21 @@
+{% extends "pdf/_base.html" %}{% block titulo_cab %}Demonstrativo de custos (LRF){% endblock %}{% block sub_cab %}Competência {{ planilha.competencia|date:"m/Y" }} · versão {{ planilha.versao }}{% endblock %}
+{% block estilo %}td.obs { font-size: 8pt; color: #5b6478; } tr.grupo td { background: #EEF2F8; font-weight: bold; }{% endblock %}
+{% block conteudo %}
+{% if previa %}<div style="border:2px dashed #B45309;color:#B45309;text-align:center;font-weight:bold;padding:6pt;margin-bottom:10pt">PRÉVIA — DOCUMENTO AINDA NÃO APROVADO</div>{% endif %}
+<h1>Demonstrativo da despesa com Pessoal e Custeio</h1>
+<p class="muted">Para fins de apuração de outras despesas com pessoal (Lei de Responsabilidade Fiscal) · Rateio do custeio do Contrato nº {{ planilha.contrato.numero }}</p>
+<div class="caixa"><strong>Cliente:</strong> {{ planilha.contrato.cliente }}<br><strong>Objeto:</strong> {{ planilha.contrato.objeto|truncatechars:420 }}<br><strong>Valor da nota fiscal:</strong> R$ {{ total|floatformat:2 }}</div>
+<table>
+  <thead><tr><th>Componente</th><th class="num">%</th><th class="num">Valor (R$)</th><th>Observação / fonte</th></tr></thead>
+  <tbody>
+    <tr class="grupo"><td colspan="4">Custeio administrativo</td></tr>
+    {% for l in custeio %}<tr><td>{{ l.item.descricao }}</td><td class="num">{{ l.pct|floatformat:2 }}%</td><td class="num">{{ l.valor|floatformat:2 }}</td><td class="obs">{{ l.item.fonte }}</td></tr>{% endfor %}
+    <tr><td><strong>Total do custeio administrativo</strong></td><td class="num"><strong>{{ pct_custeio|floatformat:2 }}%</strong></td><td class="num"><strong>{{ total_custeio|floatformat:2 }}</strong></td><td></td></tr>
+    <tr class="grupo"><td colspan="4">Remuneração pela execução técnica</td></tr>
+    {% for l in pessoal %}<tr><td>{{ l.item.descricao }}</td><td class="num">{{ l.pct|floatformat:2 }}%</td><td class="num">{{ l.valor|floatformat:2 }}</td><td class="obs">{{ l.item.fonte }}</td></tr>{% endfor %}
+  </tbody>
+  <tfoot><tr><td>VALOR TOTAL DA NOTA FISCAL</td><td class="num">100,00%</td><td class="num">{{ total|floatformat:2 }}</td><td></td></tr></tfoot>
+</table>
+{% if planilha.observacoes %}<h3>Observações</h3>{{ planilha.observacoes|linebreaks }}{% endif %}
+<div class="assinatura"><div class="linha"></div>{{ empresa.razao_social }} · CNPJ {{ empresa.cnpj_formatado }}<br><span class="muted">Valença – BA, {% now "j \d\e F \d\e Y" %}</span></div>
+{% endblock %}

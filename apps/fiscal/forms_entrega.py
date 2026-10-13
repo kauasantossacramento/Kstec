@@ -32,7 +32,8 @@ class RelatorioForm(FormKS):
 class PlanilhaForm(FormKS):
     class Meta:
         model = PlanilhaCustos
-        fields = ["administracao_central", "seguro_garantia", "risco", "despesas_financeiras", "lucro", "tributos", "observacoes"]
+        fields = ["modelo", "administracao_central", "seguro_garantia", "risco", "despesas_financeiras", "lucro", "tributos",
+                  "observacoes"]
 
 
 class ItemCustoForm(FormKS):

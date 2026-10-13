@@ -23,5 +23,6 @@ urlpatterns += [path("notas/<uuid:pk>/recebivel/", gerar_recebivel, name="gerar_
 urlpatterns += [path("notas/<uuid:pk>/pdf/", views_entrega.pdf, name="pdf"),
                 path("notas/<uuid:pk>/entregas/", views_entrega.entregas, name="entregas"),
                 path("entregas/<uuid:pk>/", views_entrega.entrega_revisar, name="entrega_revisar"),
-                path("contratos/<uuid:pk>/documentos/", views_entrega.documentos, name="documentos_contrato")]
+                path("contratos/<uuid:pk>/documentos/", views_entrega.documentos, name="documentos_contrato"),
+                path("previa/<slug:tipo>/<uuid:pk>/", views_entrega.previa, name="previa")]
 urlpatterns += notas.urls(novo=CriarNota, editar=EditarNota, detalhe=DetalheNota) + perfis.urls()

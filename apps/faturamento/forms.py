@@ -110,6 +110,16 @@ class AgendaForm(FormKS):
 
 
 class CicloForm(FormKS):
+    propagar = forms.ChoiceField(label="aplicar a nova data de emissão em", required=False,
+                                 help_text="Repete o mesmo dia de emissão nos meses seguintes. Valor e texto continuam só "
+                                           "desta competência.")
+
+    def __init__(self, *args, **kwargs):
+        from .services.ciclos import PROPAGAR
+
+        super().__init__(*args, **kwargs)
+        self.fields["propagar"].choices = list(PROPAGAR.items())
+
     class Meta:
         model = CicloFaturamento
         fields = ["valor", "data_emissao", "data_vencimento", "discriminacao"]
@@ -138,7 +148,7 @@ def contratos_json(empresa):
     saida = {}
     for c in Contrato.objects.filter(empresa=empresa, status=Contrato.Status.VIGENTE).select_related("cliente"):
         saida[str(c.pk)] = {
-            "valor": str(c.valor_mensal or ""), "dia": c.dia_faturamento or 1, "prazo": c.prazo_pagamento_dias,
+            "valor": str(c.valor_mensal or ""), "dia": c.dia_faturamento or c.vigencia_inicio.day, "prazo": c.prazo_pagamento_dias,
             "inicio": c.vigencia_inicio.replace(day=1).isoformat(), "fim": c.vigencia_fim_atual.isoformat(),
             "discriminacao": c.discriminacao_padrao, "cliente": str(c.cliente), "numero": c.numero,
             "saldo": str(c.saldo), "objeto": c.objeto[:300],

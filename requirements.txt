@@ -25,3 +25,4 @@ whitenoise==6.12.0
 uuid6==2025.0.1
 pypdf==6.1.1
 neonize==0.5.2
+pyHanko==0.37.0

@@ -67,6 +67,10 @@ class Contrato(ModeloBase):
         help_text="Placeholders: {competencia}, {contrato}, {empenho}, {objeto}.",
     )
     exige_relatorio_atividades = models.BooleanField("exige relatório de atividades", default=True)
+    atividades_previstas = models.TextField(
+        "atividades previstas (base do relatório)", blank=True,
+        help_text="Uma por linha. Todo relatório mensal começa com estas atividades e é complementado pelas tarefas "
+                  "executadas e registradas no sistema na competência.")
     exige_relatorio_sla = models.BooleanField("exige relatório de SLA", default=False)
     certidoes_exigidas = models.ManyToManyField("certidoes.TipoCertidao", blank=True, related_name="contratos")
     cor = models.CharField(max_length=7, default="#1E5BFF", help_text="Cor usada nos gráficos.")

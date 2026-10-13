@@ -19,8 +19,8 @@
     </section>
     {% if form and pode_escrever %}
     <details class="card">
-      <summary style="cursor:pointer;font-weight:700">{% icone "edit" 16 %} Ajustar somente esta competência</summary>
-      <p class="small muted" style="margin-top:8px">Muda valor, datas ou texto apenas deste mês. A agenda e os demais meses não são alterados.</p>
+      <summary style="cursor:pointer;font-weight:700">{% icone "edit" 16 %} Ajustar esta competência (e datas dos próximos meses)</summary>
+      <p class="small muted" style="margin-top:8px">Valor e texto valem apenas para este mês. A nova data de emissão pode ser repetida nos próximos 1 ou 2 meses ou em todos (neste caso a regra da agenda muda).</p>
       <form method="post" action="{% url 'faturamento:ciclo_acao' obj.pk 'ajustar' %}" novalidate>{% csrf_token %}
         {% include "components/form_campos.html" %}
         <div class="form-acoes"><button class="btn btn-primario" type="submit">{% icone "check" 16 %} Aplicar ajuste</button></div>

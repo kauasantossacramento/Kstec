@@ -146,3 +146,25 @@ def documentos(request, pk):
           "form_planilha": form_planilha, "custos": custos, "pode_relatorio": pode_relatorio, "pode_custos": pode_custos,
           "historico_relatorios": contrato.relatorios_atividades.filter(competencia=competencia),
           "historico_custos": contrato.planilhas_custos.filter(competencia=competencia) if ver_custos else []})
+
+
+@login_required
+def previa(request, tipo, pk):
+    """Prévia em PDF (não arquivada, não assinada) do relatório de atividades ou da planilha de custos."""
+    from apps.financeiro.services.custos import pdf_planilha
+    from apps.operacao.relatorios import previa_pdf
+
+    contratos = contratos_visiveis(request.user, Contrato.objects.filter(empresa=request.empresa))
+    if tipo == "relatorio":
+        obj = get_object_or_404(RelatorioAtividades, pk=pk, empresa=request.empresa, contrato__in=contratos)
+        pdf = previa_pdf(obj)
+    elif tipo == "planilha":
+        if not request.user.tem_papel("Administrador", "Fiscal", "Financeiro", "Leitura"):
+            raise PermissionDenied
+        obj = get_object_or_404(PlanilhaCustos, pk=pk, empresa=request.empresa, contrato__in=contratos)
+        pdf = pdf_planilha(obj, previa=True)
+    else:
+        raise PermissionDenied
+    resposta = HttpResponse(pdf, content_type="application/pdf")
+    resposta["Content-Disposition"] = f'inline; filename="previa_{tipo}_{obj.competencia:%Y%m}.pdf"'
+    return resposta

@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block titulo %}Assinatura de documentos{% endblock %}
+{% block breadcrumb %}{% icone "chevron-right" 14 %}<a href="{% url 'core:configuracoes' %}">Configurações</a>{% icone "chevron-right" 14 %}<span class="atual">Assinatura</span>{% endblock %}
+{% block h1 %}Assinatura de documentos{% endblock %}
+{% block subtitulo %}<p class="sub">Relatórios de atividades, planilhas de custos e relatórios de SLA são assinados digitalmente (PAdES, ICP-Brasil) ao serem aprovados.</p>{% endblock %}
+{% block conteudo %}
+<div class="grid g-2-1">
+  <section class="stack">
+    <div class="card">
+      {% if titular %}<p>{% status_badge "success" rotulo="Assinatura ativa" %} Os documentos aprovados serão assinados por <strong>{{ titular }}</strong>.</p>
+      {% else %}<p>{% status_badge "warning" rotulo="Sem certificado" %} Nenhum certificado válido: os PDFs serão gerados sem assinatura digital.</p>{% endif %}
+      <p class="small muted" style="margin:0">Sem certificado marcado como padrão, o sistema usa o A1 cadastrado em Emissão de notas. Valide qualquer PDF em <a href="https://validar.iti.gov.br" target="_blank" rel="noopener">validar.iti.gov.br</a>.</p>
+    </div>
+    <div class="tabela-wrap responsiva"><table class="tabela">
+      <thead><tr><th>Titular</th><th>Tipo</th><th>Validade</th><th>Situação</th><th></th></tr></thead>
+      <tbody>
+      {% for c in certificados %}
+      <tr>
+        <td data-rotulo="Titular"><strong>{{ c.titular }}</strong><br><span class="xs muted mono">{{ c.impressao_sha256|truncatechars:20 }}</span></td>
+        <td data-rotulo="Tipo">{{ c.get_tipo_display }}</td>
+        <td data-rotulo="Validade" class="mono">{{ c.validade_fim|date:"d/m/Y" }}</td>
+        <td data-rotulo="Situação">{% if not c.ativo %}{% status_badge "neutral" rotulo="Desativado" %}{% elif not c.valido %}{% status_badge "danger" rotulo="Vencido" %}{% elif c.padrao %}{% status_badge "success" rotulo="Padrão" %}{% else %}{% status_badge "info" rotulo="Disponível" %}{% endif %}</td>
+        <td data-rotulo="">{% if pode_editar %}<div class="linha" style="gap:6px">
+          {% if not c.padrao or not c.ativo %}<form method="post">{% csrf_token %}<input type="hidden" name="pk" value="{{ c.pk }}"><button class="btn btn-sm" name="acao" value="padrao">Usar por padrão</button></form>{% endif %}
+          {% if c.ativo %}<form method="post">{% csrf_token %}<input type="hidden" name="pk" value="{{ c.pk }}"><button class="btn btn-sm btn-fantasma" name="acao" value="desativar">Desativar</button></form>{% endif %}
+        </div>{% endif %}</td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="5">{% empty_state "Nenhum certificado de assinatura cadastrado." %}</td></tr>
+      {% endfor %}
+      </tbody>
+    </table></div>
+  </section>
+  {% if pode_editar %}
+  <aside class="stack">
+    <form method="post" enctype="multipart/form-data" class="card stack" novalidate autocomplete="off">{% csrf_token %}
+      <h3>{% icone "upload" 16 %} Cadastrar certificado</h3>
+      <p class="small muted" style="margin:0">e-CNPJ da empresa ou e-CPF do responsável. Arquivo e senha ficam criptografados.</p>
+      {% for campo in form %}{% include "components/campo.html" %}{% endfor %}
+      <button class="btn btn-primario" name="acao" value="cadastrar">{% icone "check" 16 %} Cadastrar</button>
+    </form>
+    <form method="post" enctype="multipart/form-data" class="card stack" novalidate>{% csrf_token %}
+      <h3>{% icone "file-text" 16 %} Assinar um PDF avulso</h3>
+      <p class="small muted" style="margin:0">Para documentos produzidos fora do sistema (ofícios, declarações).</p>
+      {% for campo in form_pdf %}{% include "components/campo.html" %}{% endfor %}
+      <button class="btn" name="acao" value="assinar"{% if not titular %} disabled{% endif %}>{% icone "download" 16 %} Assinar e baixar</button>
+    </form>
+  </aside>
+  {% endif %}
+</div>
+{% endblock %}

@@ -74,9 +74,14 @@ def aprovar(relatorio, usuario, observacoes=""):
     atual.observacoes = observacoes
     atual.dados = apurar(atual.contrato, atual.competencia)
     atual.status, atual.aprovado_por, atual.aprovado_em = "APROVADO", usuario, timezone.now()
-    pdf = renderizar_pdf("pdf/relatorio_sla.html", {"relatorio": atual, "dados": atual.dados, "empresa": atual.empresa})
+    from apps.core.services.assinatura import assinar_se_possivel, titular_padrao
+
+    pdf = renderizar_pdf("pdf/relatorio_sla.html", {"relatorio": atual, "dados": atual.dados, "empresa": atual.empresa,
+                                                     "assinatura_digital": titular_padrao(atual.empresa)})
+    pdf, titular = assinar_se_possivel(pdf, atual.empresa, f"Relatório de SLA {atual.competencia:%m/%Y} aprovado")
     atual.pdf = Anexo.criar(atual, f"sla_{atual.contrato.numero.replace('/', '-')}_{atual.competencia:%Y%m}_v{atual.versao}.pdf",
-                            pdf, descricao="Relatório de SLA aprovado", retencao_anos=5)
+                            pdf, descricao=f"Relatório de SLA aprovado · assinado por {titular}" if titular else
+                            "Relatório de SLA aprovado", retencao_anos=5)
     atual.save()
     return atual
 

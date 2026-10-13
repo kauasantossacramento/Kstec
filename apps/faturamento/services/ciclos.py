@@ -390,6 +390,60 @@ def ajustar(ciclo, *, valor, data_emissao, data_vencimento, discriminacao_texto,
     return ciclo
 
 
+PROPAGAR = {"": "Somente esta competência", "1": "Esta e a próxima competência", "2": "Esta e as 2 próximas",
+            "TODOS": "Esta e todas as seguintes (altera a agenda)"}
+
+
+def _meses_entre(a, b):
+    return (b.year - a.year) * 12 + b.month - a.month
+
+
+@transaction.atomic
+def propagar_emissao(ciclo, alcance, usuario=None):
+    """Repete nos meses seguintes o mesmo dia (e deslocamento de mês) da emissão ajustada neste ciclo.
+
+    alcance "1"/"2": ajusta só os próximos ciclos ainda editáveis; "TODOS": muda a regra da agenda
+    (dia e referência) e ressincroniza todos os ciclos programados posteriores. Retorna quantos mudaram.
+    """
+    if not alcance:
+        return 0
+    if alcance not in PROPAGAR:
+        raise ValidationError("Alcance de propagação inválido.")
+    ciclo = CicloFaturamento.objects.select_for_update(of=("self",)).select_related("agenda").get(pk=ciclo.pk)
+    agenda = AgendaFaturamento.objects.select_for_update().get(pk=ciclo.agenda_id)
+    dia = ciclo.data_emissao.day
+    deslocamento = _meses_entre(ciclo.competencia, ciclo.data_emissao.replace(day=1))
+    if alcance == "TODOS":
+        if deslocamento not in (0, 1):
+            raise ValidationError("Para mudar a regra de todos os meses, a emissão deve cair no mês da competência "
+                                  "ou no mês seguinte.")
+        agenda.dia_emissao, agenda.dia_util = dia, False
+        agenda.referencia = "MES_CORRENTE" if deslocamento == 0 else "MES_ANTERIOR"
+        agenda.full_clean()
+        agenda.save()
+    quantidade = None if alcance == "TODOS" else int(alcance)
+    planejar(agenda, hoje=ciclo.data_emissao, horizonte_dias=31 * ((quantidade or 1) + 1))
+    seguintes = (CicloFaturamento.objects.select_for_update().filter(agenda=agenda, competencia__gt=ciclo.competencia)
+                 .order_by("competencia"))
+    if quantidade:
+        seguintes = seguintes[:quantidade]
+    alterados = 0
+    for outro in seguintes:
+        if outro.status not in CicloFaturamento.EDITAVEIS or outro.nota_id:
+            continue
+        emissao = calendario.dia_no_mes(calendario.somar_meses(outro.competencia, deslocamento), dia)
+        vencimento = calendario.data_vencimento(agenda, emissao)
+        if (outro.data_emissao, outro.data_vencimento) == (emissao, vencimento):
+            continue
+        outro.data_emissao, outro.data_vencimento = emissao, vencimento
+        outro.personalizado = alcance != "TODOS" or outro.personalizado
+        outro.registrar("ajuste", f"Emissão reprogramada para {emissao:%d/%m/%Y} (propagada da competência "
+                                  f"{ciclo.competencia:%m/%Y}).", usuario)
+        outro.save()
+        alterados += 1
+    return alterados
+
+
 @transaction.atomic
 def pular(ciclo, motivo, usuario=None):
     ciclo = CicloFaturamento.objects.select_for_update(of=("self",)).select_related("nota").get(pk=ciclo.pk)

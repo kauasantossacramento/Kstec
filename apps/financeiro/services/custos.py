@@ -134,10 +134,38 @@ def salvar_planilha(planilha, dados, linhas, usuario, aprovar=False):
         item.save()
     if aprovar:
         atual.status, atual.aprovado_por, atual.aprovado_em = "APROVADO", usuario, timezone.now()
-        total = sum((i.valor_mensal for i in atual.itens.all()), Decimal(0))
         atual.xlsx = Anexo.criar(atual, f"custos_{atual.competencia:%Y%m}_v{atual.versao}.xlsx", exportar_xlsx(atual), retencao_anos=5)
-        atual.pdf = Anexo.criar(atual, f"custos_{atual.competencia:%Y%m}_v{atual.versao}.pdf",
-                      renderizar_pdf("pdf/custos.html", {"planilha": atual, "itens": atual.itens.all(), "total": total,
-                             "bdi_pct": atual.bdi * 100, "preco": total * (1 + atual.bdi), "empresa": atual.empresa}), retencao_anos=5)
+        from apps.core.services.assinatura import assinar_se_possivel, titular_padrao
+
+        pdf = pdf_planilha(atual, assinatura_digital=titular_padrao(atual.empresa))
+        pdf, titular = assinar_se_possivel(pdf, atual.empresa, f"Planilha de custos {atual.competencia:%m/%Y} aprovada")
+        atual.pdf = Anexo.criar(atual, f"custos_{atual.competencia:%Y%m}_v{atual.versao}.pdf", pdf, retencao_anos=5,
+                                descricao=f"Assinado digitalmente por {titular}" if titular else "Sem assinatura digital")
     atual.save()
     return atual
+
+
+def pdf_planilha(planilha, **extra):
+    """PDF da planilha no modelo escolhido (LRF ou BDI). `previa=True` marca o documento como não aprovado."""
+    total = sum((i.valor_mensal for i in planilha.itens.all()), Decimal(0))
+    ctx = {"planilha": planilha, "itens": planilha.itens.all(), "total": total, "bdi_pct": planilha.bdi * 100,
+           "preco": total * (1 + planilha.bdi), "empresa": planilha.empresa, **extra}
+    if planilha.modelo == "LRF":
+        ctx.update(demonstrativo_lrf(planilha))
+    return renderizar_pdf("pdf/custos_lrf.html" if planilha.modelo == "LRF" else "pdf/custos.html", ctx)
+
+
+def demonstrativo_lrf(planilha):
+    """Demonstrativo de custeio × pessoal (LRF): cada item em % do valor da nota; mão de obra = remuneração do sócio."""
+    itens = list(planilha.itens.all())
+    total = sum((i.valor_mensal for i in itens), Decimal(0))
+
+    def linha(i):
+        return {"item": i, "valor": i.valor_mensal,
+                "pct": (i.valor_mensal / total * 100).quantize(Decimal("0.01")) if total else Decimal(0)}
+    custeio = [linha(i) for i in itens if i.grupo != "MAO_DE_OBRA"]
+    pessoal = [linha(i) for i in itens if i.grupo == "MAO_DE_OBRA"]
+    soma = lambda ls: sum((x["valor"] for x in ls), Decimal(0))  # noqa: E731
+    pct = lambda v: (v / total * 100).quantize(Decimal("0.01")) if total else Decimal(0)  # noqa: E731
+    return {"custeio": custeio, "pessoal": pessoal, "total_custeio": soma(custeio), "total_pessoal": soma(pessoal),
+            "pct_custeio": pct(soma(custeio)), "pct_pessoal": pct(soma(pessoal)), "total": total}

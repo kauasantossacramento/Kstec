@@ -4,7 +4,7 @@ from calendar import monthrange
 from dataclasses import dataclass
 from datetime import date, timedelta
 
-from apps.contratos.models import somar_meses
+from apps.contratos.models import somar_meses  # noqa: F401 (reexportado)
 
 MESES = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro",
          "novembro", "dezembro"]

@@ -552,3 +552,32 @@ class ContaEmail(ModeloBase):
     @property
     def remetente(self):
         return f"{self.nome_remetente} <{self.email}>"
+
+
+class CertificadoAssinatura(ModeloSimples):
+    """Certificado ICP-Brasil (A1) usado para assinar PDFs: e-CNPJ da empresa ou e-CPF do responsável."""
+
+    class Tipo(models.TextChoices):
+        EMPRESA = "EMPRESA", "Empresa (e-CNPJ)"
+        RESPONSAVEL = "RESPONSAVEL", "Responsável (e-CPF)"
+
+    tipo = models.CharField(max_length=12, choices=Tipo.choices)
+    titular = models.CharField(max_length=200, editable=False)
+    documento = models.CharField(max_length=14, blank=True, editable=False)
+    validade_fim = models.DateTimeField(editable=False)
+    impressao_sha256 = models.CharField(max_length=64, editable=False)
+    arquivo_criptografado = models.BinaryField(editable=False)
+    senha_criptografada = models.BinaryField(editable=False)
+    padrao = models.BooleanField("usar por padrão", default=True)
+
+    class Meta:
+        verbose_name = "certificado de assinatura"
+        verbose_name_plural = "certificados de assinatura"
+        ordering = ["-padrao", "-criado_em"]
+
+    def __str__(self):
+        return f"{self.titular} · {self.get_tipo_display()}"
+
+    @property
+    def valido(self):
+        return self.ativo and self.validade_fim > timezone.now()

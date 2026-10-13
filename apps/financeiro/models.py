@@ -17,6 +17,9 @@ class PlanilhaCustos(ModeloBase):
     status = models.CharField(max_length=12, choices=[("RASCUNHO", "Rascunho"), ("APROVADO", "Aprovado")],
                               default="RASCUNHO", editable=False)
     observacoes = models.TextField("observações e fontes", blank=True)
+    modelo = models.CharField("modelo do documento", max_length=4, default="LRF",
+                              choices=[("LRF", "Demonstrativo LRF (custeio × pessoal, soma = valor da nota)"),
+                                       ("BDI", "Composição de custos com BDI")])
     aprovado_por = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.PROTECT, editable=False, related_name="+")
     aprovado_em = models.DateTimeField(null=True, blank=True, editable=False)
     xlsx = models.ForeignKey("core.Anexo", null=True, blank=True, on_delete=models.PROTECT, editable=False, related_name="+")

@@ -23,6 +23,7 @@ from .crud import Coluna, Crud
 from .forms import FormKS, FormSimples
 from .models import (
     Anexo,
+    CertificadoAssinatura,
     ContaEmail,
     Empresa,
     LogAcesso,
@@ -390,3 +391,69 @@ def emails(request):
 
     return render(request, "core/emails.html", {"blocos": blocos, "real": envio_real("ALERTAS", request.empresa),
                   "pode_salvar": request.user.tem_papel("Administrador", "Financeiro") and not request.user.somente_leitura})
+
+
+# ---------------------------------------------------------------------------
+# Assinatura digital de documentos
+# ---------------------------------------------------------------------------
+
+class CertificadoAssinaturaForm(FormSimples):
+    tipo = forms.ChoiceField(choices=CertificadoAssinatura.Tipo.choices)
+    arquivo = forms.FileField(label="certificado A1 (.pfx/.p12)")
+    senha = forms.CharField(widget=forms.PasswordInput(render_value=False), strip=False)
+    padrao = forms.BooleanField(label="usar por padrão nas assinaturas", required=False, initial=True)
+
+
+class AssinarPdfForm(FormSimples):
+    arquivo = forms.FileField(label="PDF para assinar", help_text="Até 15 MB. Devolve o PDF assinado (PAdES).")
+
+
+@login_required
+def assinaturas(request):
+    from django.core.exceptions import ValidationError
+
+    from .services import assinatura
+
+    if not request.user.tem_papel("Administrador", "Fiscal", "Financeiro", "Leitura"):
+        raise PermissionDenied
+    form = CertificadoAssinaturaForm(prefix="cert")
+    form_pdf = AssinarPdfForm(prefix="pdf")
+    if request.method == "POST":
+        exigir_escrita(request.user, ["Administrador", "Fiscal", "Financeiro"])
+        acao = request.POST.get("acao")
+        try:
+            if acao == "cadastrar":
+                form = CertificadoAssinaturaForm(request.POST, request.FILES, prefix="cert")
+                if form.is_valid():
+                    d = form.cleaned_data
+                    c = assinatura.cadastrar(request.empresa, d["arquivo"].read(), d["senha"], d["tipo"], d["padrao"])
+                    messages.success(request, f"Certificado de {c.titular} cadastrado.")
+                    return redirect("core:assinaturas")
+            elif acao in ("padrao", "desativar"):
+                c = get_object_or_404(CertificadoAssinatura, pk=request.POST.get("pk"), empresa=request.empresa)
+                if acao == "padrao":
+                    CertificadoAssinatura.objects.filter(empresa=request.empresa).update(padrao=False)
+                    c.padrao, c.ativo = True, True
+                else:
+                    c.ativo, c.padrao = False, False
+                c.save()
+                messages.success(request, "Certificado atualizado.")
+                return redirect("core:assinaturas")
+            elif acao == "assinar":
+                form_pdf = AssinarPdfForm(request.POST, request.FILES, prefix="pdf")
+                if form_pdf.is_valid():
+                    arq = form_pdf.cleaned_data["arquivo"]
+                    if arq.size > 15_000_000 or not arq.name.lower().endswith(".pdf"):
+                        raise ValidationError("Envie um PDF de até 15 MB.")
+                    pdf, _ = assinatura.assinar_pdf(arq.read(), request.empresa, "Documento assinado no KS CENTRAL")
+                    nome = arq.name.rsplit(".", 1)[0] + "_assinado.pdf"
+                    return FileResponse(io.BytesIO(pdf), as_attachment=True, filename=nome, content_type="application/pdf")
+        except ValidationError as erro:
+            messages.error(request, "; ".join(erro.messages))
+    try:
+        titular = assinatura.titular_padrao(request.empresa)
+    except ValidationError:
+        titular = None
+    return render(request, "core/assinaturas.html", {
+        "certificados": CertificadoAssinatura.objects.filter(empresa=request.empresa), "titular": titular,
+        "form": form, "form_pdf": form_pdf, "pode_editar": request.user.tem_papel("Administrador", "Fiscal", "Financeiro")})

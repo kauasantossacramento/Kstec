@@ -21,7 +21,8 @@ class ContratoForm(FormKS):
                   "data_assinatura", "vigencia_inicio", "vigencia_fim", "valor_global", "valor_mensal",
                   "forma_faturamento", "dia_faturamento", "prazo_pagamento_dias", "indice_reajuste",
                   "data_base_reajuste", "status", "gestor_contrato", "fiscal_contrato", "discriminacao_padrao",
-                  "exige_relatorio_atividades", "exige_relatorio_sla", "certidoes_exigidas", "responsaveis", "cor"]
+                  "exige_relatorio_atividades", "atividades_previstas", "exige_relatorio_sla", "certidoes_exigidas",
+                  "responsaveis", "cor"]
         widgets = {"certidoes_exigidas": forms.CheckboxSelectMultiple, "responsaveis": forms.CheckboxSelectMultiple,
                    "cor": forms.TextInput(attrs={"type": "color"})}
 

@@ -19,4 +19,5 @@
 <body>
 <div class="cab"><img src="{{ logo }}" alt="KS TEC"><div style="text-align:right"><strong>{% block titulo_cab %}{% endblock %}</strong><br><span class="muted">{% block sub_cab %}{% endblock %}</span></div></div>
 {% block conteudo %}{% endblock %}
+{% if assinatura_digital %}<p class="hash">Documento assinado digitalmente com certificado ICP-Brasil (PAdES) — {{ assinatura_digital }}. Verifique em https://validar.iti.gov.br</p>{% endif %}
 </body></html>

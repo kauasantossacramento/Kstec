@@ -22,6 +22,7 @@ urlpatterns = [
     path("configuracoes/", views.configuracoes, name="configuracoes"),
     path("configuracoes/empresa/", views.empresa_editar, name="empresa"),
     path("configuracoes/emails/", views.emails, name="emails"),
+    path("configuracoes/assinatura/", views.assinaturas, name="assinaturas"),
     *views.CRUD_USUARIO.urls(),
     *views.CRUD_PARAMETRO.urls(),
     *views.CRUD_LOG.urls(),

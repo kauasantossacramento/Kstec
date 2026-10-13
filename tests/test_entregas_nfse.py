@@ -284,7 +284,7 @@ def test_permissoes_e_telas(cli, client, leitor, nota_autorizada, contrato, pdf_
     rel.refresh_from_db()
     assert rel.status == "APROVADO" and rel.pdf_id
     plan = PlanilhaCustos.objects.get(contrato=contrato)
-    dados = {campo: "0" for campo in PARAMETROS} | {"observacoes": "Teste", "acao": "aprovar_custos", "versao_id": str(plan.pk),
+    dados = {campo: "0" for campo in PARAMETROS} | {"observacoes": "Teste", "modelo": "LRF", "acao": "aprovar_custos", "versao_id": str(plan.pk),
               "custos-TOTAL_FORMS": "1", "custos-INITIAL_FORMS": "0", "custos-MIN_NUM_FORMS": "0", "custos-MAX_NUM_FORMS": "100",
               "custos-0-grupo": "LICENCAS", "custos-0-descricao": "Teste", "custos-0-unidade": "un", "custos-0-quantidade": "1",
               "custos-0-valor_unitario": "10", "custos-0-rateio_pct": "100", "custos-0-periodicidade": "MENSAL", "custos-0-fonte": "Teste"}

@@ -238,7 +238,9 @@ def ciclo_acao(request, pk, acao):
                 ciclos.ajustar(obj, valor=d["valor"], data_emissao=d["data_emissao"],
                                data_vencimento=d["data_vencimento"], discriminacao_texto=d["discriminacao"],
                                usuario=request.user)
-                messages.success(request, "Ajuste aplicado somente a esta competência.")
+                n = ciclos.propagar_emissao(obj, d.get("propagar", ""), request.user)
+                messages.success(request, "Ajuste aplicado a esta competência" + (
+                    f" e a data de emissão propagada para {n} competência(s) seguinte(s)." if n else "."))
         else:
             raise Http404
     except ValidationError as erro:

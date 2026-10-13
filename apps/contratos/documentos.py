@@ -36,6 +36,7 @@ class Linha:
     anexo_extra_id: object = None
     link: str = ""
     objeto_id: object = None
+    previa: str = ""
 
 
 class DocumentoForm(FormSimples):
@@ -82,13 +83,15 @@ def linhas(request, contratos, tipo="", competencia=None):
             saida.append(Linha("RELATORIO_ATIVIDADES", "Relatório de atividades", r.contrato, r.competencia,
                                f"Relatório de atividades v{r.versao}", "Gerado no sistema", r.get_status_display(),
                                "success" if r.status == "APROVADO" else "neutral", r.pdf_id,
-                               link=reverse("fiscal:documentos_contrato", args=[r.contrato_id]) + f"?competencia={r.competencia:%Y-%m-%d}"))
+                               link=reverse("fiscal:documentos_contrato", args=[r.contrato_id]) + f"?competencia={r.competencia:%Y-%m-%d}",
+                               previa=reverse("fiscal:previa", args=["relatorio", r.pk]) if not r.pdf_id else ""))
     if ver_custos and tipo in ("", "PLANILHA_CUSTOS"):
         for p in PlanilhaCustos.objects.filter(**filtro, ativo=True).select_related("contrato"):
             saida.append(Linha("PLANILHA_CUSTOS", "Planilha de custos", p.contrato, p.competencia, f"Planilha de custos v{p.versao}",
                                "Gerado no sistema", p.get_status_display(), "success" if p.status == "APROVADO" else "neutral",
                                p.pdf_id, p.xlsx_id,
-                               link=reverse("fiscal:documentos_contrato", args=[p.contrato_id]) + f"?competencia={p.competencia:%Y-%m-%d}"))
+                               link=reverse("fiscal:documentos_contrato", args=[p.contrato_id]) + f"?competencia={p.competencia:%Y-%m-%d}",
+                               previa=reverse("fiscal:previa", args=["planilha", p.pk]) if not p.pdf_id else ""))
     if tipo in ("", "RELATORIO_SLA"):
         for s in RelatorioSLA.objects.filter(**filtro, ativo=True).select_related("contrato"):
             saida.append(Linha("RELATORIO_SLA", "Relatório de SLA", s.contrato, s.competencia, f"Relatório de SLA v{s.versao}",
