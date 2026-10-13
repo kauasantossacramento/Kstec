@@ -88,21 +88,28 @@ def documentos_contrato(nota):
             "certidoes": certidoes_validas(contrato)}
 
 
-def arquivos_documentos(docs):
+def arquivos_documentos(docs, descricoes=None):
+    """PDFs dos documentos da competência. `descricoes` (dict) recebe nome do arquivo → descrição para o índice."""
+    descricoes = {} if descricoes is None else descricoes
     arquivos = []
+
+    def incluir(anexo, descricao):
+        arquivos.append((anexo.nome, anexo.ler()))
+        descricoes[anexo.nome] = descricao
+    assinado = " — assinado digitalmente (ICP-Brasil)"
     if docs["relatorio"]:
-        arquivos.append((docs["relatorio"].pdf.nome, docs["relatorio"].pdf.ler()))
+        incluir(docs["relatorio"].pdf, f"Relatório de atividades{assinado}")
     if docs["planilha"]:
         # Ao cliente vai só o PDF assinado; o XLSX é de uso interno.
-        arquivos.append((docs["planilha"].pdf.nome, docs["planilha"].pdf.ler()))
+        incluir(docs["planilha"].pdf, f"Demonstrativo de custos{assinado}")
     if docs["sla"]:
-        arquivos.append((docs["sla"].pdf.nome, docs["sla"].pdf.ler()))
+        incluir(docs["sla"].pdf, f"Relatório de SLA{assinado}")
     for doc in docs["enviados"]:
         if doc.tipo == "CONTRATO":
             continue  # o contrato o cliente já possui; fica só no arquivo do sistema
         if (doc.tipo == "RELATORIO_ATIVIDADES" and docs["relatorio"]) or (doc.tipo == "PLANILHA_CUSTOS" and docs["planilha"])                 or (doc.tipo == "RELATORIO_SLA" and docs["sla"]):
             continue  # o documento aprovado no sistema prevalece
-        arquivos.append((doc.anexo.nome, doc.anexo.ler()))
+        incluir(doc.anexo, doc.titulo + (" — assinado" if doc.assinado else ""))
     return arquivos
 
 
@@ -139,9 +146,10 @@ def preparar_entrega(nota, destinatarios, assunto, mensagem):
     arquivos = [(pdf.nome, pdf.ler()), (f"nfse_{nota.numero_nfse}.xml", nota.xml_autorizado.ler())]
     manifesto = {"nota": str(nota.pk), "contrato": str(nota.contrato_id) if nota.contrato_id else None,
                  "competencia": str(nota.competencia.replace(day=1)), "certidoes": []}
+    descricoes = {pdf.nome: f"Nota Fiscal de Serviço eletrônica nº {nota.numero_nfse} (DANFSe)"}
     if documentos:
         certs = documentos["certidoes"]
-        arquivos.extend(arquivos_documentos(documentos))
+        arquivos.extend(arquivos_documentos(documentos, descricoes))
         cert_arquivos = []
         for indice, cert in enumerate(certs, 1):
             with cert.arquivo.open("rb") as f:
@@ -150,15 +158,21 @@ def preparar_entrega(nota, destinatarios, assunto, mensagem):
                 raise ValidationError(f"O arquivo da certidão {cert.tipo.nome} não é PDF.")
             nome = f"{indice:02d}_{slugify(cert.tipo.nome)[:80]}.pdf"
             cert_arquivos.append((nome, dados))
+            descricoes[f"certidoes_{nome}"] = (f"{cert.tipo.nome} — {cert.get_situacao_display().lower()}, "
+                                               f"válida até {cert.data_validade:%d/%m/%Y}")
             manifesto["certidoes"].append({"id": str(cert.pk), "tipo": str(cert.tipo_id), "nome": cert.tipo.nome,
                                           "validade": str(cert.data_validade), "sha256": hashlib.sha256(dados).hexdigest()})
         indice_cert = renderizar_pdf("pdf/certidoes_entrega.html", {"nota": nota, "certidoes": certs, "empresa": nota.empresa})
         arquivos.append(("kit_certidoes.zip", zip_bytes([("00_indice.pdf", indice_cert), *cert_arquivos])))
+        descricoes["certidoes_00_indice.pdf"] = "Relação das certidões de regularidade vigentes"
         manifesto.update(ids_documentos(documentos))
     manifesto["arquivos"] = [{"nome": n, "tamanho": len(c), "sha256": hashlib.sha256(c).hexdigest()} for n, c in arquivos]
     if documentos:
+        # O índice lista exatamente os PDFs que seguem anexos ao e-mail (ver anexos_email).
+        itens = [{"arquivo": n, "descricao": descricoes.get(n, n)}
+                 for n, _, _ in anexos_email(zip_bytes(arquivos))]
         arquivos.insert(0, ("00_indice.pdf", renderizar_pdf("pdf/pacote_entrega.html", {"nota": nota,
-                                     "manifesto": manifesto, "empresa": nota.empresa})))
+                                     "itens": itens, "empresa": nota.empresa})))
     arquivos.append(("manifesto.json", json.dumps(manifesto, ensure_ascii=False, indent=2).encode("utf-8")))
     pacote = Anexo.criar(nota, f"pacote_nfse_{nota.numero_nfse}.zip", zip_bytes(arquivos), retencao_anos=5)
     return EntregaNota.objects.create(empresa=nota.empresa, nota=nota, destinatarios=destinos,
