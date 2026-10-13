@@ -5,8 +5,8 @@
 <div class="caixa"><strong>Contrato:</strong> {{ relatorio.contrato.numero }}<br><strong>Cliente:</strong> {{ relatorio.contrato.cliente }}<br><strong>Competência:</strong> {{ relatorio.competencia|date:"m/Y" }}<br><strong>Objeto:</strong> {{ relatorio.contrato.objeto|truncatechars:400 }}<br><strong>Disponibilidade média:</strong> {% if dados.uptime_geral is not None %}{{ dados.uptime_geral|floatformat:3 }}%{% else %}sem medições no período{% endif %}</div>
 <h2>Disponibilidade por sistema</h2>
 <table class="sla">
-  <colgroup><col style="width:27%"><col style="width:19%"><col style="width:12%"><col style="width:9%"><col style="width:11%"><col style="width:10%"><col style="width:12%"></colgroup>
-  <thead><tr><th>Sistema</th><th>Período apurado</th><th>Disponib.</th><th>Meta</th><th>Resultado</th><th>Incid.</th><th>Indisponível</th></tr></thead>
+  <colgroup><col style="width:24%"><col style="width:17%"><col style="width:11%"><col style="width:10%"><col style="width:14%"><col style="width:8%"><col style="width:16%"></colgroup>
+  <thead><tr><th>Sistema</th><th>Período apurado</th><th>Disponib.</th><th>Meta</th><th>Resultado</th><th>Incid.</th><th>Tempo fora</th></tr></thead>
   <tbody>{% for s in dados.sistemas %}<tr>
     <td><strong>{{ s.nome }}</strong><br><span class="fonte">{{ s.url }}</span></td>
     <td>{{ s.periodo|default:"mês da competência" }}</td>
