@@ -5,6 +5,8 @@ from . import views
 app_name = "financeiro"
 urlpatterns = [path("", views.home, name="home"), path("demonstrativo/", views.demonstrativo, name="demonstrativo"),
     path("extratos/", views.extratos, name="extratos"),
+    path("a-receber/", views.a_receber, name="a_receber"),
+    path("faturamento/", views.faturamento_mes, name="faturamento_mes"),
     path("extratos/<uuid:pk>/conciliar/", views.conciliar, name="conciliar"),
     path("lancamentos/<uuid:pk>/baixar/", views.baixar, name="baixar"),
     path("lancamentos/<uuid:pk>/cancelar/", views.cancelar, name="cancelar")]

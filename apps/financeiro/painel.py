@@ -12,11 +12,17 @@ from .models import Lancamento
 def financeiro(empresa, usuario):
     if not usuario.tem_papel("Administrador", "Financeiro", "Fiscal", "Leitura"):
         return {}
+    from .services import indicadores
     from .services.relatorios import dre
 
     hoje = timezone.localdate()
-    pendentes = Lancamento.objects.filter(empresa=empresa, tipo="RECEITA").exclude(status__in=["PAGO", "CANCELADO"])
-    return {"a_receber": pendentes.aggregate(v=Sum("valor"))["v"] or 0,
+    abertos = indicadores.abertos(empresa)
+    vencidos = abertos.filter(data_vencimento__lt=hoje)
+    fat = indicadores.faturamento(empresa, hoje.replace(day=1))
+    return {"a_receber": abertos.aggregate(v=Sum("valor"))["v"] or 0,
+            "a_receber_vencido": vencidos.aggregate(v=Sum("valor"))["v"] or 0, "tem_vencido": vencidos.exists(),
+            "faturado_mes": fat["total_competencia"], "emitido_mes": fat["total_emitidas"],
+            "link_a_receber": reverse("financeiro:a_receber"), "link_faturado": reverse("financeiro:faturamento_mes"),
             "resultado_mes": dre(empresa, hoje.replace(day=1), hoje)["resultado"]}
 
 
@@ -31,9 +37,12 @@ def vencimentos(empresa, inicio, fim):
 def atrasados(empresa, usuario):
     if not usuario.tem_papel("Administrador", "Financeiro", "Fiscal", "Leitura"):
         return []
-    qs = Lancamento.objects.filter(empresa=empresa, data_vencimento__lt=timezone.localdate()).exclude(status__in=["PAGO", "CANCELADO"])
+    from .services import indicadores
+
+    qs = indicadores.abertos(empresa).filter(data_vencimento__lt=timezone.localdate())
     quantidade = qs.count()
     if not quantidade:
         return []
     total = qs.aggregate(v=Sum("valor"))["v"]
-    return [ItemAtencao(f"{quantidade} lançamento(s) vencido(s)", reverse("financeiro:home"), "danger", 20, str(total), "wallet")]
+    return [ItemAtencao(f"{quantidade} recebível(is) vencido(s)", reverse("financeiro:a_receber") + "?situacao=vencidos",
+                        "danger", 20, str(total), "wallet")]

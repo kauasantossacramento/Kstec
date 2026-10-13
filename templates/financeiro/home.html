@@ -5,7 +5,9 @@
 {% block conteudo %}
 <section class="card" style="margin-bottom:16px"><h3>Recebíveis por atraso</h3><div class="grid g-4">{% for faixa in aging %}<div><p class="muted small">{{ faixa.nome }}</p><strong>{{ faixa.total|brl }}</strong><p class="small">{{ faixa.quantidade }} lançamento(s)</p></div>{% endfor %}</div></section>
 <div class="linha" style="gap:12px;flex-wrap:wrap;margin-bottom:20px">
-  <a class="btn btn-primario" href="{% url 'financeiro:lancamento_lista' %}">Lançamentos</a>
+  <a class="btn btn-primario" href="{% url 'financeiro:a_receber' %}">A receber e recebimentos</a>
+  <a class="btn" href="{% url 'financeiro:faturamento_mes' %}">Faturamento do mês</a>
+  <a class="btn" href="{% url 'financeiro:lancamento_lista' %}">Lançamentos</a>
   <a class="btn" href="{% url 'financeiro:conta_lista' %}">Contas bancárias</a>
   <a class="btn" href="{% url 'financeiro:categoria_lista' %}">Categorias</a>
   <a class="btn" href="{% url 'financeiro:centro_lista' %}">Centros de custo</a>

@@ -67,7 +67,10 @@ def saldos_contas(empresa, data):
 def aging(empresa, hoje):
     from datetime import timedelta
 
-    qs = base(empresa).filter(tipo="RECEITA").exclude(status="PAGO")
+    from django.db.models import Q
+
+    qs = (base(empresa).filter(tipo="RECEITA").exclude(status="PAGO")
+          .filter(Q(nota_fiscal__isnull=True) | Q(nota_fiscal__status="AUTORIZADA")))
     faixas = []
     for nome, minimo, maximo in [("A vencer / vence hoje", None, 0), ("1 a 30 dias", 1, 30),
         ("31 a 60 dias", 31, 60), ("61 a 90 dias", 61, 90), ("Mais de 90 dias", 91, None)]:

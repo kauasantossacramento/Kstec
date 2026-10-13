@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block titulo %}Faturamento do mês{% endblock %}
+{% block breadcrumb %}{% icone "chevron-right" 14 %}<a href="{% url 'financeiro:home' %}">Financeiro</a>{% icone "chevron-right" 14 %}<span class="atual">Faturamento</span>{% endblock %}
+{% block h1 %}Faturamento · {{ mes|date:"m/Y" }}{% endblock %}
+{% block subtitulo %}<p class="sub">“Faturado no mês” considera a competência (serviço prestado no mês). Notas de competências anteriores emitidas neste mês aparecem separadas.</p>{% endblock %}
+{% block conteudo %}
+<div class="linha" style="gap:6px;margin-bottom:12px">
+  <a class="btn btn-sm btn-fantasma" href="?mes={{ mes_anterior|date:'Y-m' }}">{% icone "chevron-left" 14 %} {{ mes_anterior|date:"m/Y" }}</a>
+  <form method="get"><input class="input" type="month" name="mes" value="{{ mes|date:'Y-m' }}" data-auto-submit aria-label="Mês"></form>
+  <a class="btn btn-sm btn-fantasma" href="?mes={{ mes_seguinte|date:'Y-m' }}">{{ mes_seguinte|date:"m/Y" }} {% icone "chevron-right" 14 %}</a>
+</div>
+<div class="grid g-4">
+  <div class="card kpi"><span class="rotulo">{% icone "receipt" 16 %}Faturado (competência {{ mes|date:"m/Y" }})</span><span class="valor">{{ total_competencia|brl }}</span><span class="xs muted">{{ competencia|length }} nota(s)</span></div>
+  <div class="card kpi"><span class="rotulo">{% icone "send" 16 %}Emitido no mês</span><span class="valor">{{ total_emitidas|brl }}</span><span class="xs muted">{{ emitidas|length }} nota(s)</span></div>
+  <div class="card kpi"><span class="rotulo">{% icone "clock" 16 %}Competências anteriores emitidas no mês</span><span class="valor">{{ total_atrasadas|brl }}</span><span class="xs muted">{{ atrasadas|length }} nota(s)</span></div>
+  <div class="card kpi"><span class="rotulo">{% icone "check" 16 %}Recebido no mês</span><span class="valor">{{ recebido.total|brl }}</span><a class="xs" href="{% url 'financeiro:a_receber' %}">a receber</a></div>
+</div>
+<section class="card" style="margin-top:16px"><h3>Notas da competência {{ mes|date:"m/Y" }}</h3>
+  <div class="tabela-wrap responsiva"><table class="tabela"><thead><tr><th>NFS-e</th><th>Contrato</th><th>Tomador</th><th>Emitida em</th><th class="num">Valor</th><th class="num">Líquido</th></tr></thead>
+  <tbody>{% for n in competencia %}<tr><td data-rotulo="NFS-e"><a href="{% url 'fiscal:nota_detalhe' n.pk %}">{{ n.numero_nfse }}</a></td><td data-rotulo="Contrato">{{ n.contrato.numero|default:"—" }}</td><td data-rotulo="Tomador">{{ n.tomador|truncatechars:34 }}</td><td data-rotulo="Emitida" class="mono">{{ n.autorizada_em|date:"d/m/Y" }}</td><td data-rotulo="Valor" class="num mono">{{ n.valor_servicos|brl }}</td><td data-rotulo="Líquido" class="num mono">{{ n.valor_liquido|brl }}</td></tr>{% empty %}<tr><td colspan="6" class="muted">Nenhuma nota desta competência.</td></tr>{% endfor %}</tbody>
+  {% if competencia %}<tfoot><tr><td colspan="4">Total</td><td class="num mono">{{ total_competencia|brl }}</td><td></td></tr></tfoot>{% endif %}</table></div>
+</section>
+<section class="card" style="margin-top:16px"><h3>Emitidas em {{ mes|date:"m/Y" }} (qualquer competência)</h3>
+  <div class="tabela-wrap responsiva"><table class="tabela"><thead><tr><th>NFS-e</th><th>Competência</th><th>Contrato</th><th>Tomador</th><th class="num">Valor</th></tr></thead>
+  <tbody>{% for n in emitidas %}<tr><td data-rotulo="NFS-e"><a href="{% url 'fiscal:nota_detalhe' n.pk %}">{{ n.numero_nfse }}</a></td><td data-rotulo="Competência" class="mono">{{ n.competencia|date:"m/Y" }}{% if n.competencia < mes %} {% status_badge "warning" rotulo="anterior" %}{% endif %}</td><td data-rotulo="Contrato">{{ n.contrato.numero|default:"—" }}</td><td data-rotulo="Tomador">{{ n.tomador|truncatechars:34 }}</td><td data-rotulo="Valor" class="num mono">{{ n.valor_servicos|brl }}</td></tr>{% empty %}<tr><td colspan="5" class="muted">Nenhuma nota emitida no mês.</td></tr>{% endfor %}</tbody>
+  {% if emitidas %}<tfoot><tr><td colspan="4">Total</td><td class="num mono">{{ total_emitidas|brl }}</td></tr></tfoot>{% endif %}</table></div>
+</section>
+{% endblock %}

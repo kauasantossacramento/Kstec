@@ -213,3 +213,82 @@ def demonstrativo(request):
            "contratos": Contrato.objects.filter(empresa=request.empresa),
            "fluxo": relatorios.fluxo_caixa(request.empresa, inicio, fim, contrato)}
     return render(request, "financeiro/demonstrativo.html", ctx)
+
+
+# ---------------------------------------------------------------------------
+# A receber (composição dos indicadores, filtro por mês e baixa em lote)
+# ---------------------------------------------------------------------------
+
+def _somar_meses(mes, n):
+    from apps.contratos.models import somar_meses
+
+    return somar_meses(mes, n)
+
+
+@login_required
+def a_receber(request):
+    """O que compõe o "A receber": filtros por mês (vencimento ou competência), contrato e situação; recebimento em lote."""
+    from datetime import date
+
+    from apps.contratos.models import Contrato
+
+    from .services import indicadores
+
+    _leitura(request)
+    hoje = timezone.localdate()
+    if request.method == "POST":
+        exigir_escrita(request.user, ["Financeiro"])
+        ids = request.POST.getlist("selecionados")
+        conta = ContaBancaria.objects.filter(pk=request.POST.get("conta_bancaria") or None, empresa=request.empresa).first()
+        forma = request.POST.get("forma_pagamento", "")
+        try:
+            data_pg = date.fromisoformat(request.POST.get("data_pagamento", ""))
+        except ValueError:
+            data_pg = None
+        if not ids:
+            messages.error(request, "Selecione ao menos um recebível.")
+        elif data_pg is None:
+            messages.error(request, "Informe a data do recebimento.")
+        else:
+            ok, erros = 0, []
+            for lanc in indicadores.abertos(request.empresa).filter(pk__in=ids):
+                try:
+                    lancamentos.baixar(lanc, data_pagamento=data_pg, forma_pagamento=forma, conta_bancaria=conta,
+                                       ordem_bancaria=request.POST.get(f"ob_{lanc.pk}", "") or request.POST.get("ordem_bancaria", ""))
+                    ok += 1
+                except ValidationError as erro:
+                    erros.append(f"{lanc.descricao[:40]}: {'; '.join(erro.messages)}")
+            if ok:
+                messages.success(request, f"{ok} recebimento(s) registrado(s) em {data_pg:%d/%m/%Y}.")
+            for e in erros[:6]:
+                messages.error(request, e)
+        return redirect(request.get_full_path())
+
+    base = request.GET.get("base", "vencimento") if request.GET.get("base") in ("vencimento", "competencia") else "vencimento"
+    todos = request.GET.get("mes") == "todos" or "mes" not in request.GET
+    mes = None if todos else indicadores.mes_de(request.GET.get("mes"), hoje)
+    contratos = Contrato.objects.filter(empresa=request.empresa).order_by("numero")
+    contrato = contratos.filter(pk=request.GET.get("contrato")).first() if request.GET.get("contrato") else None
+    situacao = request.GET.get("situacao", "")
+    dados = indicadores.resumo(request.empresa, hoje, mes=mes, base=base, contrato=contrato, situacao=situacao)
+    referencia = mes or hoje.replace(day=1)
+    return render(request, "financeiro/a_receber.html", {
+        **dados, "mes": mes, "base": base, "contratos": contratos, "contrato_sel": contrato, "situacao": situacao,
+        "mes_anterior": _somar_meses(referencia, -1), "mes_seguinte": _somar_meses(referencia, 1), "hoje": hoje,
+        "recebido_mes": indicadores.recebido(request.empresa, referencia), "referencia": referencia,
+        "contas": ContaBancaria.objects.filter(empresa=request.empresa, ativo=True),
+        "formas": Lancamento.Forma.choices, "pode_baixar": request.user.tem_papel("Administrador", "Financeiro")})
+
+
+@login_required
+def faturamento_mes(request):
+    """O que compõe o "Faturado no mês": notas por competência × notas emitidas no mês."""
+    from .services import indicadores
+
+    _leitura(request)
+    hoje = timezone.localdate()
+    mes = indicadores.mes_de(request.GET.get("mes"), hoje)
+    return render(request, "financeiro/faturamento_mes.html", {
+        **indicadores.faturamento(request.empresa, mes), "mes": mes,
+        "mes_anterior": _somar_meses(mes, -1), "mes_seguinte": _somar_meses(mes, 1),
+        "recebido": indicadores.recebido(request.empresa, mes)})
