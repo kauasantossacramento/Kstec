@@ -10,6 +10,7 @@ from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.hazmat.primitives.serialization import BestAvailableEncryption, pkcs12
 from cryptography.x509.oid import NameOID
+from django.core.exceptions import ValidationError
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.urls import reverse
 from django.utils import timezone
@@ -199,3 +200,30 @@ def test_carimbo_localiza_nome_da_empresa(empresa, monkeypatch):
     assinatura.cadastrar(empresa, pfx_sintetico(), SENHA, "EMPRESA")
     pdf, _ = assinatura.assinar_pdf(pdf_minimo(), empresa, "Teste", ancora="KS TEC")
     assert assinatura.esta_assinado(pdf)
+
+
+def test_sla_com_medicao_manual_do_uptimerobot(cli, empresa, contrato):
+    from apps.sla.models import RelatorioSLA, Sistema
+    from apps.sla.services import relatorio as sla
+
+    s1 = Sistema.objects.create(empresa=empresa, nome="Nuvem", url="https://nuvem.example.com", contrato=contrato)
+    Sistema.objects.create(empresa=empresa, nome="Painel", url="https://painel.example.com", contrato=contrato)
+    rel = sla.novo(contrato, date(2026, 9, 1))
+    assert rel.dados["sem_dados"]
+    url = reverse("relatorios:sla", args=[rel.pk])
+    p = str(s1.pk)
+    cli.post(url, {"acao": "manual", "sistema": p, f"{p}-periodo_inicio": "2026-09-01", f"{p}-periodo_fim": "2026-09-30",
+                   f"{p}-uptime": "99,976", f"{p}-incidentes": "2", f"{p}-indisponivel_seg": "611",
+                   f"{p}-tempo_medio_ms": "286", f"{p}-tempo_min_ms": "278", f"{p}-tempo_max_ms": "294",
+                   f"{p}-intervalo_min": "5", f"{p}-fonte": "UptimeRobot", f"{p}-referencia": "Painel do monitor"})
+    rel.refresh_from_db()
+    linha = rel.dados["sistemas"][0]
+    assert not rel.dados["sem_dados"] and rel.dados["omitidos"] == ["Painel"] and len(rel.dados["sistemas"]) == 1
+    assert linha["origem"] == "manual" and linha["uptime"] == 99.976 and linha["atingiu"]
+    assert linha["indisponivel_txt"] == "10 min 11 s" and linha["periodo"] == "01/09/2026 a 30/09/2026"
+    assert "medição manual registrada" in cli.get(url).content.decode()
+    v2 = sla.novo(contrato, date(2026, 9, 1))  # nova versão herda a medição manual
+    assert v2.dados["sistemas"][0]["origem"] == "manual"
+    RelatorioSLA.objects.filter(pk=rel.pk).update(status="APROVADO")
+    with pytest.raises(ValidationError):
+        sla.registrar_manual(RelatorioSLA.objects.get(pk=rel.pk), s1, None)

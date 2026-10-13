@@ -160,6 +160,22 @@ def arquivar(request, pk):
 # Relatório de SLA
 # ---------------------------------------------------------------------------
 
+class MedicaoManualForm(FormSimples):
+    """Medição de disponibilidade informada a partir de um monitor externo (ex.: UptimeRobot)."""
+    periodo_inicio = forms.DateField(label="início do período apurado")
+    periodo_fim = forms.DateField(label="fim do período apurado")
+    uptime = forms.DecimalField(label="disponibilidade (%)", max_digits=7, decimal_places=3, min_value=0, max_value=100)
+    incidentes = forms.IntegerField(label="incidentes", min_value=0, initial=0)
+    indisponivel_seg = forms.IntegerField(label="tempo indisponível (segundos)", min_value=0, initial=0,
+                                          help_text="Ex.: 10 min 11 s = 611.")
+    tempo_medio_ms = forms.IntegerField(label="resposta média (ms)", min_value=0, required=False)
+    tempo_min_ms = forms.IntegerField(label="resposta mínima (ms)", min_value=0, required=False)
+    tempo_max_ms = forms.IntegerField(label="resposta máxima (ms)", min_value=0, required=False)
+    intervalo_min = forms.IntegerField(label="intervalo de verificação (min)", min_value=1, initial=5, required=False)
+    fonte = forms.CharField(label="fonte", max_length=60, initial="UptimeRobot")
+    referencia = forms.CharField(label="referência / observação", max_length=300, required=False,
+                                 help_text="Ex.: painel do monitor, intervalo “Últimos 30 dias” consultado em 13/10/2026.")
+
 @login_required
 @require_POST
 def sla_gerar(request):
@@ -188,6 +204,27 @@ def sla(request, pk):
     rel = get_object_or_404(RelatorioSLA.objects.select_related("contrato__cliente", "pdf"), pk=pk, empresa=request.empresa)
     if not contratos_visiveis(request.user, Contrato.objects.filter(pk=rel.contrato_id)).exists():
         raise PermissionDenied
+    sistemas = list(rel.contrato.sistemas.filter(ativo=True).order_by("nome"))
+    manuais = rel.dados.get("manuais") or {}
+    if request.method == "POST" and request.POST.get("acao") in ("manual", "remover_manual"):
+        exigir_escrita(request.user, ["Fiscal", "Financeiro", "Operação"])
+        sistema = next((s for s in sistemas if str(s.pk) == request.POST.get("sistema")), None)
+        if sistema is None:
+            raise PermissionDenied
+        form = MedicaoManualForm(request.POST, prefix=str(sistema.pk))
+        try:
+            if request.POST["acao"] == "remover_manual":
+                srv.registrar_manual(rel, sistema, None)
+                messages.success(request, f"Medição manual de {sistema.nome} removida.")
+            elif form.is_valid():
+                srv.registrar_manual(rel, sistema, form.cleaned_data)
+                messages.success(request, f"Medição manual de {sistema.nome} registrada e relatório reapurado.")
+            else:
+                messages.error(request, "Revise a medição: " + "; ".join(
+                    f"{form.fields[c].label}: {' '.join(e)}" if c in form.fields else " ".join(e) for c, e in form.errors.items()))
+        except ValidationError as erro:
+            messages.error(request, "; ".join(erro.messages))
+        return redirect("relatorios:sla", pk=pk)
     if request.method == "POST":
         exigir_escrita(request.user, ["Fiscal", "Financeiro", "Operação"])
         try:
@@ -197,7 +234,12 @@ def sla(request, pk):
         else:
             messages.success(request, "Relatório de SLA aprovado e PDF gerado.")
         return redirect("relatorios:sla", pk=pk)
-    return render(request, "contratos/relatorio_sla.html", {"rel": rel, "dados": rel.dados,
+    inicio = rel.competencia.replace(day=1)
+    blocos = [{"sistema": s, "manual": str(s.pk) in manuais, "form": MedicaoManualForm(
+        prefix=str(s.pk), initial=manuais.get(str(s.pk)) or {"periodo_inicio": inicio, "periodo_fim": srv.periodo(inicio)[1].date(),
+                                                              "fonte": "UptimeRobot", "intervalo_min": 5, "incidentes": 0,
+                                                              "indisponivel_seg": 0})} for s in sistemas]
+    return render(request, "contratos/relatorio_sla.html", {"rel": rel, "dados": rel.dados, "blocos": blocos,
                   "pode_aprovar": pode_escrever(request.user, ["Fiscal", "Financeiro", "Operação"]) and rel.status != "APROVADO"})
 
 
