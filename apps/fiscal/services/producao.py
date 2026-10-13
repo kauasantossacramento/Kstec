@@ -64,8 +64,8 @@ def preparar_dps_producao(a1, numero, *, municipio, inscricao_municipal, tomador
     """ME/EPP do Simples, ISS tributável, sem regime especial.
 
     Sem retenção: regApTribSN=1, tpRetISSQN=1 e pAliq informado.
-    ISS retido pelo tomador: espelha as NFS-e autorizadas 2600000000007–011 do portal E&L —
-    regApTribSN=2, tpRetISSQN=2, sem pAliq (aplicada pela Sefin) e tomador com IM e endereço.
+    ISS retido pelo tomador: regApTribSN=2, tpRetISSQN=2, pAliq informado e tomador com IM e endereço.
+    (Até 08/2026 o E&L aceitava a retenção sem pAliq; desde 10/2026 rejeita com EL0496.)
     Não infere a alíquota total a partir do ISS nem reutiliza massa sintética.
     """
     if not str(numero).isdigit() or not 1 <= int(numero) < 10**15:
@@ -79,7 +79,8 @@ def preparar_dps_producao(a1, numero, *, municipio, inscricao_municipal, tomador
     if not descricao or not (tomador.get("cpf") or tomador.get("cnpj")) or not tomador.get("nome"):
         raise ValidationError("Informe descrição do serviço e tomador.")
     # O E&L grava a discriminação com quebras de linha trocadas por espaço; enviamos já normalizado.
-    descricao = " ".join(descricao.split())
+    # "°" (grau) vira "?" no E&L; o ordinal "º" é preservado.
+    descricao = " ".join(descricao.replace("°", "º").split())
     valor = decimal_fiscal(valor, Decimal("0.01"), Decimal("999999999999.99"))
     aliquota = decimal_fiscal(aliquota_iss, Decimal("2"), Decimal("5"))
     total = decimal_fiscal(total_tributos_simples, Decimal("0"), Decimal("100"))
@@ -130,8 +131,7 @@ def preparar_dps_producao(a1, numero, *, municipio, inscricao_municipal, tomador
     mun = elemento(trib, "tribMun")
     elemento(mun, "tribISSQN", 1)
     elemento(mun, "tpRetISSQN", 2 if iss_retido else 1)
-    if not iss_retido:
-        elemento(mun, "pAliq", aliquota)
+    elemento(mun, "pAliq", aliquota)
     elemento(elemento(trib, "totTrib"), "pTotTribSN", total)
     signer = AssinadorSemPrefixo(method=methods.enveloped, signature_algorithm="rsa-sha256", digest_algorithm="sha256",
                                 c14n_algorithm="http://www.w3.org/TR/2001/REC-xml-c14n-20010315")

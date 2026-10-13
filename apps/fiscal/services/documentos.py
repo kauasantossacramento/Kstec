@@ -28,8 +28,8 @@ def descompactar_nfse(retorno):
 
 def conteudo(no):
     """Estrutura comparável do XML. Espaços em branco são normalizados: o emissor municipal (E&L) substitui
-    quebras de linha da discriminação por espaço ao autorizar a NFS-e."""
-    texto = " ".join((no.text or "").split())
+    quebras de linha da discriminação por espaço ao autorizar a NFS-e. O E&L também grava "°" (grau) como "?"."""
+    texto = " ".join((no.text or "").replace("°", "?").split())
     return no.tag, dict(no.attrib), texto, [conteudo(filho) for filho in no]
 
 

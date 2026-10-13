@@ -1,5 +1,5 @@
 {% extends "pdf/_base.html" %}{% block titulo_cab %}Relatório de SLA · disponibilidade{% endblock %}{% block sub_cab %}{{ relatorio.competencia|date:"m/Y" }} · versão {{ relatorio.versao }}{% endblock %}
-{% block conteudo %}
+{% block estilo %}table { font-size: 8pt; table-layout: fixed; } th, td { padding: 4pt 3pt; word-wrap: break-word; }{% endblock %}{% block conteudo %}
 <h1>Níveis de serviço do período</h1>
 <div class="caixa"><strong>Contrato:</strong> {{ relatorio.contrato.numero }}<br><strong>Cliente:</strong> {{ relatorio.contrato.cliente }}<br><strong>Objeto:</strong> {{ relatorio.contrato.objeto|truncatechars:400 }}<br><strong>Disponibilidade média:</strong> {% if dados.uptime_geral is not None %}{{ dados.uptime_geral|floatformat:3 }}%{% else %}sem medições no período{% endif %}</div>
 <h2>Disponibilidade por sistema</h2>

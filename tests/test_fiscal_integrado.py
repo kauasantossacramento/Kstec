@@ -323,7 +323,7 @@ def test_importacao_historica_preserva_valores_do_xml(preparado):
 
 
 def test_dps_iss_retido_espelha_nota_autorizada_do_portal(preparado):
-    """Mesmos campos da NFS-e 2600000000007 (válida): regApTribSN=2, tpRetISSQN=2, sem pAliq, tomador com IM e endereço."""
+    """regApTribSN=2, tpRetISSQN=2, pAliq informado (exigido pelo E&L desde 10/2026, EL0496), tomador com IM e endereço."""
     from apps.core.models import Endereco
 
     nota, config = preparado
@@ -335,6 +335,7 @@ def test_dps_iss_retido_espelha_nota_autorizada_do_portal(preparado):
     nota.perfil.iss_retido = True
     nota.perfil.save()
     nota.valor_servicos = Decimal("4950")
+    nota.discriminacao = "Contrato N° 116/2026"
     salvar(nota)
     assert (nota.valor_iss, nota.valor_iss_retido, nota.valor_liquido) == (Decimal("99.00"), Decimal("99.00"), Decimal("4851.00"))
     emissao.validar_emissao(nota, config)
@@ -342,7 +343,8 @@ def test_dps_iss_retido_espelha_nota_autorizada_do_portal(preparado):
     dps = etree.fromstring(tentativa.dps_assinada.ler()).find(f"{{{NS}}}infDPS")
     t = lambda c: dps.findtext("/".join(f"{{{NS}}}{x}" for x in c.split("/")))  # noqa: E731
     assert t("prest/regTrib/regApTribSN") == "2" and t("valores/trib/tribMun/tpRetISSQN") == "2"
-    assert dps.find(f"{{{NS}}}valores/{{{NS}}}trib/{{{NS}}}tribMun/{{{NS}}}pAliq") is None
+    assert t("valores/trib/tribMun/pAliq") == "2.00"
+    assert t("serv/cServ/xDescServ") == "Contrato Nº 116/2026"  # "°" vira "?" no E&L; o ordinal é preservado
     assert t("toma/IM") == "0000005082" and t("toma/end/endNac/cMun") == "2932903" and t("toma/end/xBairro") == "Centro"
 
 
