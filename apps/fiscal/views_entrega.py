@@ -168,3 +168,46 @@ def previa(request, tipo, pk):
     resposta = HttpResponse(pdf, content_type="application/pdf")
     resposta["Content-Disposition"] = f'inline; filename="previa_{tipo}_{obj.competencia:%Y%m}.pdf"'
     return resposta
+
+
+@login_required
+def emails(request):
+    """E-mails de notas e documentos enviados, com as respostas, avisos automáticos e devoluções recebidas."""
+    from django.db.models import Count, Q
+
+    from .models import RespostaEmail
+    from .services.caixa_email import sincronizar
+
+    _leitura(request)
+    if request.method == "POST":
+        exigir_escrita(request.user, ["Fiscal", "Financeiro"])
+        try:
+            n = sincronizar(request.empresa)
+        except Exception as erro:  # noqa: BLE001 — servidor de e-mail indisponível
+            messages.error(request, f"Não foi possível ler a caixa de e-mail: {str(erro)[:150]}")
+        else:
+            messages.success(request, f"Caixa verificada: {n} mensagem(ns) nova(s) vinculada(s).")
+        return redirect(request.get_full_path())
+    qs = (EntregaNota.objects.filter(empresa=request.empresa).exclude(status="PREPARADA")
+          .select_related("nota__contrato", "nota__tomador")
+          .annotate(qtd_respostas=Count("respostas", filter=Q(respostas__tipo="RESPOSTA")),
+                    qtd_auto=Count("respostas", filter=Q(respostas__tipo="AUTOMATICA")),
+                    qtd_devolucao=Count("respostas", filter=Q(respostas__tipo="DEVOLUCAO")))
+          .prefetch_related("respostas").order_by("-enviado_em", "-criado_em"))
+    busca = request.GET.get("q", "").strip()
+    if busca:
+        qs = qs.filter(Q(assunto__icontains=busca) | Q(destinatarios__icontains=busca) | Q(nota__numero_nfse__icontains=busca)
+                       | Q(nota__contrato__numero__icontains=busca))
+    filtro = request.GET.get("filtro", "")
+    if filtro == "respondidos":
+        qs = qs.filter(qtd_respostas__gt=0)
+    elif filtro == "devolvidos":
+        qs = qs.filter(qtd_devolucao__gt=0)
+    elif filtro == "sem_retorno":
+        qs = qs.filter(qtd_respostas=0, qtd_auto=0, qtd_devolucao=0)
+    return render(request, "fiscal/emails.html", {
+        "envios": qs[:200], "busca": busca, "filtro": filtro,
+        "soltas": RespostaEmail.objects.filter(empresa=request.empresa, entrega__isnull=True)[:30],
+        "pode_verificar": pode_escrever(request.user, ["Fiscal", "Financeiro"]),
+        "total_respostas": RespostaEmail.objects.filter(empresa=request.empresa, tipo="RESPOSTA").count(),
+        "total_devolucoes": RespostaEmail.objects.filter(empresa=request.empresa, tipo="DEVOLUCAO").count()})

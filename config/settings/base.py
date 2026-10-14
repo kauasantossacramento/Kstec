@@ -193,6 +193,10 @@ CELERY_BEAT_SCHEDULE = {
         "task": "apps.faturamento.tasks.processar_ciclos",
         "schedule": crontab(minute="*/15"),
     },
+    "fiscal.sincronizar_respostas": {
+        "task": "apps.fiscal.tasks.sincronizar_respostas",
+        "schedule": crontab(minute="*/15"),
+    },
     "faturamento.acompanhar_transmissoes": {
         "task": "apps.faturamento.tasks.acompanhar_transmissoes",
         "schedule": crontab(minute="*/10"),

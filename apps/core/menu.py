@@ -16,6 +16,8 @@ MENU = [
     {"rotulo": "Catálogo", "url": "catalogo:item_lista", "icone": "package", "prefixo": "/catalogo/"},
     {"rotulo": "Operação", "url": "operacao:tarefa_lista", "icone": "check-square", "prefixo": "/operacao/"},
     {"rotulo": "Relatórios", "url": "relatorios:home", "icone": "book", "prefixo": "/relatorios/"},
+    {"rotulo": "E-mails enviados", "url": "fiscal:emails", "icone": "send", "prefixo": "/fiscal/emails/",
+     "papeis": ["Fiscal", "Financeiro", "Leitura"]},
     {"rotulo": "Custos", "url": "custos:planilha_lista", "icone": "calculator", "prefixo": "/custos/"},
     {"rotulo": "Monitoramento", "url": "sla:home", "icone": "activity", "prefixo": "/sla/"},
     {"rotulo": "Certidões", "url": "certidoes:home", "icone": "shield", "prefixo": "/certidoes/"},

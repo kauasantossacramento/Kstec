@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% block titulo %}E-mails enviados{% endblock %}
+{% block breadcrumb %}{% icone "chevron-right" 14 %}<span class="atual">E-mails enviados</span>{% endblock %}
+{% block h1 %}E-mails enviados e respostas{% endblock %}
+{% block subtitulo %}<p class="sub">Notas e documentos enviados pelo sistema. Respostas, avisos automáticos e devoluções chegam da caixa de envio a cada 15 minutos.</p>{% endblock %}
+{% block acoes %}{% if pode_verificar %}<form method="post">{% csrf_token %}<button class="btn btn-primario" type="submit">{% icone "refresh" 16 %} Verificar respostas agora</button></form>{% endif %}{% endblock %}
+{% block conteudo %}
+<form method="get" class="filtros card" style="padding:14px 16px">
+  <input class="input" type="search" name="q" value="{{ busca }}" placeholder="Buscar por destinatário, assunto, NFS-e ou contrato" aria-label="Buscar">
+  <select class="input select" name="filtro" aria-label="Filtro" data-auto-submit>
+    <option value="">Todos os envios</option>
+    <option value="respondidos"{% if filtro == "respondidos" %} selected{% endif %}>Com resposta</option>
+    <option value="devolvidos"{% if filtro == "devolvidos" %} selected{% endif %}>Não entregues (devolvidos)</option>
+    <option value="sem_retorno"{% if filtro == "sem_retorno" %} selected{% endif %}>Sem retorno</option>
+  </select>
+  <button class="btn" type="submit">{% icone "search" 16 %} Filtrar</button>
+  {% if busca or filtro %}<a class="btn btn-fantasma btn-sm" href="?">Limpar</a>{% endif %}
+</form>
+
+<div class="grid g-3" style="margin:16px 0">
+  <div class="card kpi"><span class="rotulo">{% icone "send" 16 %}Envios listados</span><span class="valor">{{ envios|length }}</span></div>
+  <div class="card kpi"><span class="rotulo">{% icone "message" 16 %}Respostas recebidas</span><span class="valor">{{ total_respostas }}</span></div>
+  <div class="card kpi{% if total_devolucoes %} alerta{% endif %}"><span class="rotulo">{% icone "alert" 16 %}Devoluções (não entregues)</span><span class="valor">{{ total_devolucoes }}</span></div>
+</div>
+
+<div class="stack">
+{% for e in envios %}
+<details class="card">
+  <summary style="cursor:pointer;list-style:none">
+    <div class="linha entre" style="gap:10px;flex-wrap:wrap">
+      <div>
+        <strong>{{ e.assunto|truncatechars:110 }}</strong><br>
+        <span class="small muted">{{ e.enviado_em|date:"d/m/Y H:i"|default:"—" }} · para {{ e.destinatarios|join:", " }}{% if e.nota.contrato %} · contrato {{ e.nota.contrato.numero }}{% endif %}</span>
+      </div>
+      <div class="linha" style="gap:6px;flex-wrap:wrap">
+        {% if e.status == "ENVIADA" %}{% status_badge "success" rotulo="Enviado" %}{% elif e.status == "INCERTA" %}{% status_badge "warning" rotulo="Envio incerto" %}{% else %}{% status_badge "neutral" rotulo=e.get_status_display %}{% endif %}
+        {% if e.qtd_devolucao %}{% status_badge "danger" rotulo="Não entregue" %}{% endif %}
+        {% if e.qtd_respostas %}{% status_badge "info" rotulo="Respondido" %}{% endif %}
+        {% if e.qtd_auto %}{% status_badge "neutral" rotulo="Recebimento confirmado" %}{% endif %}
+      </div>
+    </div>
+  </summary>
+  <div class="stack" style="margin-top:12px">
+    <div class="small"><a href="{% url 'fiscal:nota_detalhe' e.nota_id %}">NFS-e {{ e.nota.numero_nfse }}</a> · {{ e.nota.tomador }} · competência {{ e.nota.competencia|date:"m/Y" }} · <a href="{% url 'fiscal:entrega_revisar' e.pk %}">ver envio e anexos</a></div>
+    <div class="texto-previa small" style="white-space:pre-line">{{ e.mensagem|truncatechars:900 }}</div>
+    {% for r in e.respostas.all %}
+    <div class="card" style="background:var(--fundo-sutil,#F4F6FA)">
+      <div class="linha entre small" style="flex-wrap:wrap;gap:6px"><span><strong>{{ r.remetente_nome|default:r.remetente }}</strong> &lt;{{ r.remetente }}&gt; · {{ r.recebido_em|date:"d/m/Y H:i" }}</span>
+        {% if r.tipo == "DEVOLUCAO" %}{% status_badge "danger" rotulo=r.get_tipo_display %}{% elif r.tipo == "AUTOMATICA" %}{% status_badge "neutral" rotulo=r.get_tipo_display %}{% else %}{% status_badge "info" rotulo=r.get_tipo_display %}{% endif %}</div>
+      <p class="small" style="margin:4px 0 0"><strong>{{ r.assunto|default:"(sem assunto)" }}</strong></p>
+      <div class="small" style="white-space:pre-line;margin-top:6px">{{ r.texto|truncatechars:3000|default:"(sem texto)" }}</div>
+      {% if r.anexos %}<p class="xs muted" style="margin:6px 0 0">Anexos: {{ r.anexos|join:", " }}</p>{% endif %}
+    </div>
+    {% empty %}<p class="small muted">Nenhum retorno recebido para este envio.</p>{% endfor %}
+  </div>
+</details>
+{% empty %}
+{% empty_state "Nenhum e-mail enviado com estes filtros." %}
+{% endfor %}
+</div>
+
+{% if soltas %}
+<section class="card" style="margin-top:16px">
+  <h3>Mensagens recebidas sem vínculo com um envio</h3>
+  {% for r in soltas %}<div style="margin:10px 0"><div class="small"><strong>{{ r.remetente }}</strong> · {{ r.recebido_em|date:"d/m/Y H:i" }} · {{ r.get_tipo_display }} · {{ r.assunto }}</div><div class="small muted" style="white-space:pre-line">{{ r.texto|truncatechars:600 }}</div></div>{% endfor %}
+</section>
+{% endif %}
+{% endblock %}

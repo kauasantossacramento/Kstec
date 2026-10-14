@@ -241,6 +241,10 @@ def enviar_entrega(entrega):
 
     conexao_smtp, remetente, copia = conexao("DOCUMENTOS", atual.empresa)
     mail = EmailMessage(atual.assunto, atual.mensagem, remetente, atual.destinatarios, bcc=copia, connection=conexao_smtp)
+    from email.utils import make_msgid
+
+    message_id = make_msgid(domain=(remetente.rsplit("@", 1)[-1].strip("> ") or "kstec.online"))
+    mail.extra_headers["Message-ID"] = message_id
     for nome, conteudo, tipo in anexos_email(dados):
         mail.attach(nome, conteudo, tipo)
     try:
@@ -254,5 +258,6 @@ def enviar_entrega(entrega):
     simulacao = type(conexao_smtp).__module__.rsplit(".", 1)[-1] in ("console", "filebased", "locmem", "dummy")
     atual.status = "SIMULADA" if simulacao else "ENVIADA"
     atual.enviado_em = timezone.now()
+    atual.message_id = message_id
     atual.save()
     return atual

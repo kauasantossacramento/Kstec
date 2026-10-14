@@ -179,6 +179,39 @@ class EntregaNota(ModeloBase):
     manifesto = models.JSONField(default=dict)
     status = models.CharField(max_length=15, choices=Status.choices, default=Status.PREPARADA, editable=False)
     enviado_em = models.DateTimeField(null=True, blank=True, editable=False)
+    message_id = models.CharField(max_length=250, blank=True, editable=False, db_index=True,
+                                  help_text="Message-ID do e-mail enviado, para vincular respostas.")
 
     class Meta:
         ordering = ["-criado_em"]
+
+
+class RespostaEmail(ModeloSimples):
+    """Mensagem recebida na caixa de envio de documentos e vinculada a um envio (resposta, aviso automático
+    ou devolução de e-mail não entregue). Lida por IMAP; nunca é apagada da caixa."""
+
+    class Tipo(models.TextChoices):
+        RESPOSTA = "RESPOSTA", "Resposta"
+        AUTOMATICA = "AUTOMATICA", "Aviso automático"
+        DEVOLUCAO = "DEVOLUCAO", "Não entregue (devolução)"
+
+    entrega = models.ForeignKey(EntregaNota, null=True, blank=True, on_delete=models.SET_NULL, related_name="respostas")
+    message_id = models.CharField(max_length=250)
+    tipo = models.CharField(max_length=12, choices=Tipo.choices, default=Tipo.RESPOSTA)
+    remetente = models.CharField(max_length=250)
+    remetente_nome = models.CharField(max_length=250, blank=True)
+    assunto = models.CharField(max_length=300, blank=True)
+    recebido_em = models.DateTimeField()
+    texto = models.TextField(blank=True)
+    anexos = models.JSONField(default=list, blank=True)
+    vinculo = models.CharField("vinculado por", max_length=20, blank=True)
+    lida = models.BooleanField(default=False)
+
+    class Meta:
+        ordering = ["-recebido_em"]
+        verbose_name = "resposta de e-mail"
+        verbose_name_plural = "respostas de e-mail"
+        constraints = [models.UniqueConstraint(fields=["empresa", "message_id"], name="resposta_email_unica")]
+
+    def __str__(self):
+        return f"{self.get_tipo_display()} de {self.remetente}"

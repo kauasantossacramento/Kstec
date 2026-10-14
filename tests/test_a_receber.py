@@ -73,3 +73,18 @@ def test_baixa_em_lote(cli, empresa, cenario):
     assert Lancamento.objects.filter(pk__in=ids, status="PAGO").count() == 2
     assert indicadores.resumo(empresa, cenario["hoje"])["total"] == 0
     assert indicadores.recebido(empresa, cenario["hoje"].replace(day=1))["total"] == Decimal("2000")
+
+
+def test_eventos_do_whatsapp_em_threads_fecham_a_conexao(empresa, monkeypatch):
+    import threading
+
+    from apps.mensageria.services import worker
+
+    fechadas = []
+    monkeypatch.setattr(worker.connections, "close_all", lambda: fechadas.append(threading.current_thread().name))
+    monkeypatch.setattr(worker, "_atualizar_estado", lambda *a, **k: None)
+    worker.atualizar_estado(empresa, "AGUARDANDO_QR")          # thread principal: não fecha
+    t = threading.Thread(target=worker.atualizar_estado, args=(empresa, "AGUARDANDO_QR"), name="neonize-evento")
+    t.start()
+    t.join()
+    assert fechadas == ["neonize-evento"]

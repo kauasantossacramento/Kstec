@@ -3,9 +3,10 @@
 import base64
 import io
 import logging
+import threading
 from datetime import timedelta
 
-from django.db import close_old_connections, transaction
+from django.db import close_old_connections, connections, transaction
 from django.utils import timezone
 
 from apps.core import contexto
@@ -22,7 +23,21 @@ FALHAS_PARA_PAUSAR = 3
 PAUSA_DISJUNTOR = timedelta(minutes=30)
 
 
+def fechar_conexoes_da_thread():
+    """Eventos do neonize chegam em threads próprias: cada uma abriria uma conexão com o banco que nunca seria
+    devolvida (vazou até esgotar o max_connections do PostgreSQL). Fora da thread principal, fecha ao terminar."""
+    if threading.current_thread() is not threading.main_thread():
+        connections.close_all()
+
+
 def atualizar_estado(empresa, estado, qr=None, conta=None, detalhe=None):
+    try:
+        _atualizar_estado(empresa, estado, qr, conta, detalhe)
+    finally:
+        fechar_conexoes_da_thread()
+
+
+def _atualizar_estado(empresa, estado, qr=None, conta=None, detalhe=None):
     with contexto.usar_contexto(empresa):
         close_old_connections()
         obj = fila.estado_de(empresa)
@@ -54,9 +69,12 @@ def qr_png(texto):
 
 
 def receber(empresa, telefone, texto, wa_id):
-    with contexto.usar_contexto(empresa):
-        close_old_connections()
-        comandos.processar(empresa, telefone, texto, wa_id)
+    try:
+        with contexto.usar_contexto(empresa):
+            close_old_connections()
+            comandos.processar(empresa, telefone, texto, wa_id)
+    finally:
+        fechar_conexoes_da_thread()
 
 
 def _destino(msg, transporte):
