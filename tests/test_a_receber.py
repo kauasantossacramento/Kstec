@@ -58,9 +58,22 @@ def test_painel_e_tela_a_receber_com_filtro_por_mes(cli, empresa, cenario):
     assert reverse("financeiro:a_receber") in painel and reverse("financeiro:faturamento_mes") in painel
     pagina = cli.get(reverse("financeiro:a_receber")).content.decode()
     assert "NFS-e 1" in pagina and "NFS-e 2" in pagina and "NFS-e 3" not in pagina
-    mes = cli.get(reverse("financeiro:a_receber") + f"?mes={cenario['anterior']:%Y-%m}&base=competencia").content.decode()
-    assert "NFS-e 2" in mes and "NFS-e 1" not in mes
+    vencidos = cli.get(reverse("financeiro:a_receber") + "?ver=vencidos").content.decode()
+    assert "NFS-e 2" in vencidos and "NFS-e 1" not in vencidos
+    venc = (cenario["hoje"] + timedelta(days=20)).strftime("%Y-%m")
+    mes = cli.get(reverse("financeiro:a_receber") + f"?ver={venc}").content.decode()
+    assert "NFS-e 1" in mes and "NFS-e 2" not in mes and "Vence em" in mes
     assert cli.get(reverse("financeiro:faturamento_mes")).status_code == 200
+
+
+def test_baixa_de_uma_linha(cli, empresa, cenario):
+    from apps.financeiro.models import Lancamento
+
+    lanc = Lancamento.objects.get(descricao="NFS-e 1")
+    cli.post(reverse("financeiro:a_receber"), {"unico": str(lanc.pk), "data_pagamento": cenario["hoje"].isoformat(),
+                                               "conta_bancaria": cenario["conta"].pk, "forma_pagamento": "PIX"})
+    lanc.refresh_from_db()
+    assert lanc.status == "PAGO" and Lancamento.objects.get(descricao="NFS-e 2").status != "PAGO"
 
 
 def test_baixa_em_lote(cli, empresa, cenario):

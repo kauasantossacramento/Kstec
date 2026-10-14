@@ -304,7 +304,8 @@ table.tabela { width: 100%; border-collapse: collapse; font-size: var(--fs-base)
   .breadcrumb { display: none; }
   .conteudo { padding: 16px 12px 88px; }
   .g-2, .g-4, .form-grid, .defs, .diff { grid-template-columns: 1fr; }
-  .pagina-cab .acoes .btn-primario { display: none; }
+  .pagina-cab .acoes { width: 100%; }
+  .pagina-cab .acoes .btn { flex: 1 1 auto; justify-content: center; }
   .fab { display: inline-flex; position: fixed; right: 16px; bottom: 16px; z-index: 40; border-radius: var(--r-pill); padding: 14px 20px; }
   /* tabelas viram listas de cards */
   .tabela-wrap.responsiva { border: 0; background: transparent; }
@@ -324,3 +325,58 @@ table.tabela { width: 100%; border-collapse: collapse; font-size: var(--fs-base)
 .grid > .card + .card, .linha > .card + .card { margin-top: 0; }
 .tabela td.num, .tabela tfoot td.num { white-space: nowrap; }
 @media (max-width: 767px) { .responsiva .tabela tfoot { display: table; width: 100%; } .responsiva .tabela tfoot tr { display: table-row; } .responsiva .tabela tfoot td { display: table-cell; } }
+
+/* ---------- KPI clicável, chips e baixa (financeiro) ---------- */
+a.kpi-link { color: inherit; text-decoration: none; transition: box-shadow .15s, border-color .15s; }
+a.kpi-link:hover { border-color: var(--primary, #0016E1); box-shadow: var(--shadow-2); }
+.kpi .detalhe { font-size: var(--fs-sm); color: var(--muted); }
+.kpi .ver-mais { font-size: var(--fs-xs); color: var(--primary, #0016E1); font-weight: 600; display: inline-flex; align-items: center; gap: 2px; margin-top: 2px; }
+.chips { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; scrollbar-width: thin; }
+.chip { display: inline-flex; flex-direction: column; gap: 2px; padding: 8px 14px; border: 1px solid var(--line); border-radius: var(--r-md);
+  background: var(--card); color: inherit; text-decoration: none; white-space: nowrap; min-width: 110px; }
+.chip small { color: var(--muted); font-size: var(--fs-xs); }
+.chip strong { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+.chip.ativo { border-color: var(--primary, #0016E1); box-shadow: inset 0 0 0 1px var(--primary, #0016E1); }
+.chip.perigo strong { color: var(--danger); }
+.resumo-receber { display: grid; grid-template-columns: 1.3fr repeat(3, 1fr); gap: 12px; align-items: end; }
+.resumo-receber .total { font-family: var(--font-mono); font-size: var(--fs-3xl, 2rem); font-weight: 600; letter-spacing: -.02em; }
+.resumo-receber .parte small { display: block; color: var(--muted); font-size: var(--fs-xs); text-transform: uppercase; font-weight: 700; }
+.resumo-receber .parte strong { font-family: var(--font-mono); font-size: var(--fs-lg); }
+.grupo-cab { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; margin: 18px 0 8px; }
+.grupo-cab h3 { margin: 0; } .grupo-cab .mono { font-weight: 600; }
+.recebivel { display: grid; grid-template-columns: auto 1fr auto auto; gap: 12px; align-items: center; padding: 12px 14px; border: 1px solid var(--line);
+  border-radius: var(--r-md); background: var(--card); margin-bottom: 8px; }
+.recebivel .valor { font-family: var(--font-mono); font-weight: 600; white-space: nowrap; }
+.recebivel .meta { font-size: var(--fs-sm); color: var(--muted); }
+.recebivel details { grid-column: 1 / -1; }
+.recebivel details > summary { list-style: none; }
+.form-baixa { display: flex; flex-wrap: wrap; gap: 8px; align-items: end; margin-top: 10px; }
+.form-baixa .input { width: auto; min-width: 140px; flex: 1 1 140px; }
+.barra-lote { position: sticky; bottom: 0; z-index: 20; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between;
+  padding: 12px 14px; margin-top: 12px; border: 1px solid var(--line); border-radius: var(--r-md); background: var(--card); box-shadow: var(--shadow-2); }
+.barra-lote .input { width: auto; min-width: 130px; }
+@media (max-width: 767px) {
+  .resumo-receber { grid-template-columns: 1fr 1fr; }
+  .resumo-receber .parte-total { grid-column: 1 / -1; }
+  .recebivel { grid-template-columns: auto 1fr; }
+  .recebivel .valor, .recebivel .acao { grid-column: 2; justify-self: start; }
+  .filtros .input, .filtros .select { min-width: 0; flex: 1 1 100%; }
+  .barra-lote { bottom: 8px; }
+  .barra-lote .input, .barra-lote .btn { flex: 1 1 100%; }
+  .kpi .valor { font-size: var(--fs-xl); word-break: break-word; }
+}
+
+/* ---------- Responsividade: nada pode estourar a largura da tela ---------- */
+.grid > *, .principal > *, .conteudo > * { min-width: 0; }
+.card { overflow-wrap: anywhere; }
+.card .mono, .defs dd { overflow-wrap: anywhere; }
+.tabela td { overflow-wrap: break-word; }
+.tabela td.num, .tabela td .badge, .btn { overflow-wrap: normal; }
+@media (max-width: 767px) {
+  /* cartão: rótulo flutua à esquerda (38%) e o conteúdo, com várias partes, flui à direita sem virar colunas */
+  .responsiva .tabela td { display: block; text-align: right; overflow: hidden; }
+  .responsiva .tabela td::before { float: left; width: 38%; padding-right: 8px; text-align: left; }
+  .responsiva .tabela td .linha { justify-content: flex-end; }
+  .defs { grid-template-columns: 1fr; }
+  .pagina-cab h1 { font-size: var(--fs-xl); overflow-wrap: anywhere; }
+}

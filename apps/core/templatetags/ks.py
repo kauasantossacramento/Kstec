@@ -190,7 +190,7 @@ def badge_obj(obj, campo="status", entidade=None):
 
 
 @register.inclusion_tag("components/kpi_card.html")
-def kpi_card(rotulo, valor, variacao=None, formato="brl", alerta=False, icone_nome=None, link=None, serie=None):
+def kpi_card(rotulo, valor, variacao=None, formato="brl", alerta=False, icone_nome=None, link=None, serie=None, detalhe=""):
     if formato == "brl":
         texto = brl(valor)
     elif formato == "pct":
@@ -199,7 +199,7 @@ def kpi_card(rotulo, valor, variacao=None, formato="brl", alerta=False, icone_no
         texto = valor if valor not in (None, "") else "—"
     var = _dec(variacao)
     return {"rotulo": rotulo, "valor": texto, "variacao": var, "alerta": alerta, "icone": icone_nome,
-            "link": link, "serie": serie}
+            "link": link, "serie": serie, "detalhe": detalhe}
 
 
 @register.inclusion_tag("components/empty_state.html")

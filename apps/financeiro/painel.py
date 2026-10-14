@@ -12,16 +12,21 @@ from .models import Lancamento
 def financeiro(empresa, usuario):
     if not usuario.tem_papel("Administrador", "Financeiro", "Fiscal", "Leitura"):
         return {}
+    from apps.core.templatetags.ks import brl
+
     from .services import indicadores
     from .services.relatorios import dre
 
     hoje = timezone.localdate()
     abertos = indicadores.abertos(empresa)
     vencidos = abertos.filter(data_vencimento__lt=hoje)
+    total_vencido = vencidos.aggregate(v=Sum("valor"))["v"] or 0
     fat = indicadores.faturamento(empresa, hoje.replace(day=1))
     return {"a_receber": abertos.aggregate(v=Sum("valor"))["v"] or 0,
-            "a_receber_vencido": vencidos.aggregate(v=Sum("valor"))["v"] or 0, "tem_vencido": vencidos.exists(),
+            "a_receber_vencido": total_vencido, "tem_vencido": bool(total_vencido),
             "faturado_mes": fat["total_competencia"], "emitido_mes": fat["total_emitidas"],
+            "detalhe_a_receber": f"{brl(total_vencido)} vencido" if total_vencido else "nada vencido",
+            "detalhe_faturado": f"serviços de {hoje:%m/%Y} · emitido no mês: {brl(fat['total_emitidas'])}",
             "link_a_receber": reverse("financeiro:a_receber"), "link_faturado": reverse("financeiro:faturamento_mes"),
             "resultado_mes": dre(empresa, hoje.replace(day=1), hoje)["resultado"]}
 
@@ -44,5 +49,7 @@ def atrasados(empresa, usuario):
     if not quantidade:
         return []
     total = qs.aggregate(v=Sum("valor"))["v"]
-    return [ItemAtencao(f"{quantidade} recebível(is) vencido(s)", reverse("financeiro:a_receber") + "?situacao=vencidos",
-                        "danger", 20, str(total), "wallet")]
+    from apps.core.templatetags.ks import brl
+
+    return [ItemAtencao(f"{quantidade} recebível(is) vencido(s)", reverse("financeiro:a_receber") + "?ver=vencidos",
+                        "danger", 20, brl(total), "wallet")]

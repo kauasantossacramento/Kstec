@@ -238,7 +238,7 @@ def a_receber(request):
     hoje = timezone.localdate()
     if request.method == "POST":
         exigir_escrita(request.user, ["Financeiro"])
-        ids = request.POST.getlist("selecionados")
+        ids = [request.POST["unico"]] if request.POST.get("unico") else request.POST.getlist("selecionados")
         conta = ContaBancaria.objects.filter(pk=request.POST.get("conta_bancaria") or None, empresa=request.empresa).first()
         forma = request.POST.get("forma_pagamento", "")
         try:
@@ -264,18 +264,36 @@ def a_receber(request):
                 messages.error(request, e)
         return redirect(request.get_full_path())
 
-    base = request.GET.get("base", "vencimento") if request.GET.get("base") in ("vencimento", "competencia") else "vencimento"
-    todos = request.GET.get("mes") == "todos" or "mes" not in request.GET
-    mes = None if todos else indicadores.mes_de(request.GET.get("mes"), hoje)
+    # Um único filtro: "" (todos), "vencidos" ou um mês de vencimento "AAAA-MM"; opcionalmente um contrato.
     contratos = Contrato.objects.filter(empresa=request.empresa).order_by("numero")
     contrato = contratos.filter(pk=request.GET.get("contrato")).first() if request.GET.get("contrato") else None
-    situacao = request.GET.get("situacao", "")
-    dados = indicadores.resumo(request.empresa, hoje, mes=mes, base=base, contrato=contrato, situacao=situacao)
-    referencia = mes or hoje.replace(day=1)
+    geral = indicadores.resumo(request.empresa, hoje, contrato=contrato)
+    filtro = request.GET.get("ver", "")
+    mes_atual = hoje.replace(day=1)
+    meses = []
+    for g in geral["por_mes"]:
+        meses.append({"chave": f"{g['mes']:%Y-%m}", "mes": g["mes"], "total": g["total"], "quantidade": g["quantidade"]})
+    if filtro == "vencidos":
+        linhas = [x for x in geral["linhas"] if x["vencido"]]
+    elif filtro:
+        linhas = [x for x in geral["linhas"] if f"{x['obj'].data_vencimento:%Y-%m}" == filtro]
+    else:
+        linhas = geral["linhas"]
+    grupos = []
+    for x in linhas:
+        chave = "Vencidos" if x["vencido"] else f"{x['obj'].data_vencimento:%m/%Y}"
+        if not grupos or grupos[-1]["titulo"] != chave:
+            grupos.append({"titulo": chave, "vencido": x["vencido"], "linhas": [], "total": 0})
+        grupos[-1]["linhas"].append(x)
+        grupos[-1]["total"] += x["obj"].valor
+    este_mes = sum((x["obj"].valor for x in geral["linhas"] if not x["vencido"]
+                    and x["obj"].data_vencimento.replace(day=1) == mes_atual), 0)
     return render(request, "financeiro/a_receber.html", {
-        **dados, "mes": mes, "base": base, "contratos": contratos, "contrato_sel": contrato, "situacao": situacao,
-        "mes_anterior": _somar_meses(referencia, -1), "mes_seguinte": _somar_meses(referencia, 1), "hoje": hoje,
-        "recebido_mes": indicadores.recebido(request.empresa, referencia), "referencia": referencia,
+        "geral": geral, "grupos": grupos, "linhas": linhas, "total_filtro": sum((x["obj"].valor for x in linhas), 0),
+        "filtro": filtro, "meses": meses, "contratos": contratos, "contrato_sel": contrato, "hoje": hoje,
+        "este_mes": este_mes, "proximos": geral["a_vencer"] - este_mes,
+        "qtd_vencidos": sum(1 for x in geral["linhas"] if x["vencido"]),
+        "recebido_mes": indicadores.recebido(request.empresa, mes_atual),
         "contas": ContaBancaria.objects.filter(empresa=request.empresa, ativo=True),
         "formas": Lancamento.Forma.choices, "pode_baixar": request.user.tem_papel("Administrador", "Financeiro")})
 

@@ -2,81 +2,70 @@
 {% block titulo %}A receber{% endblock %}
 {% block breadcrumb %}{% icone "chevron-right" 14 %}<a href="{% url 'financeiro:home' %}">Financeiro</a>{% icone "chevron-right" 14 %}<span class="atual">A receber</span>{% endblock %}
 {% block h1 %}A receber{% endblock %}
-{% block subtitulo %}<p class="sub">Receitas em aberto de notas autorizadas (notas canceladas não entram). Filtre por mês, contrato ou situação e marque os recebimentos em lote.</p>{% endblock %}
+{% block subtitulo %}<p class="sub">Notas autorizadas ainda não recebidas. Clique em <strong>Recebido</strong> quando o dinheiro entrar.</p>{% endblock %}
 {% block conteudo %}
-<form method="get" class="filtros card" style="padding:14px 16px">
-  <div class="linha" style="gap:6px">
-    <a class="btn btn-sm btn-fantasma" href="?mes={{ mes_anterior|date:'Y-m' }}&base={{ base }}{% if contrato_sel %}&contrato={{ contrato_sel.pk }}{% endif %}{% if situacao %}&situacao={{ situacao }}{% endif %}" aria-label="Mês anterior">{% icone "chevron-left" 14 %}</a>
-    <input class="input" type="month" name="mes" value="{% if mes %}{{ mes|date:'Y-m' }}{% endif %}" aria-label="Mês" data-auto-submit>
-    <a class="btn btn-sm btn-fantasma" href="?mes={{ mes_seguinte|date:'Y-m' }}&base={{ base }}{% if contrato_sel %}&contrato={{ contrato_sel.pk }}{% endif %}{% if situacao %}&situacao={{ situacao }}{% endif %}" aria-label="Próximo mês">{% icone "chevron-right" 14 %}</a>
-  </div>
-  <select class="input select" name="base" aria-label="Mês de" data-auto-submit>
-    <option value="vencimento"{% if base == "vencimento" %} selected{% endif %}>Mês de vencimento</option>
-    <option value="competencia"{% if base == "competencia" %} selected{% endif %}>Mês de competência</option>
-  </select>
+<section class="card resumo-receber">
+  <div class="parte parte-total"><small>Total a receber{% if contrato_sel %} · {{ contrato_sel.numero }}{% endif %}</small><div class="total">{{ geral.total|brl }}</div><span class="small muted">{{ geral.linhas|length }} nota(s) em aberto</span></div>
+  <div class="parte"><small>Vencido</small><strong{% if geral.vencido %} style="color:var(--danger)"{% endif %}>{{ geral.vencido|brl }}</strong></div>
+  <div class="parte"><small>Vence este mês</small><strong>{{ este_mes|brl }}</strong></div>
+  <div class="parte"><small>Próximos meses</small><strong>{{ proximos|brl }}</strong></div>
+</section>
+<p class="xs muted" style="margin:6px 2px 14px">Recebido em {{ hoje|date:"m/Y" }}: <strong>{{ recebido_mes.total|brl }}</strong> ({{ recebido_mes.quantidade }} baixa(s)).</p>
+
+<nav class="chips" aria-label="Filtrar">
+  <a class="chip{% if not filtro %} ativo{% endif %}" href="?{% if contrato_sel %}contrato={{ contrato_sel.pk }}{% endif %}"><small>Todos</small><strong>{{ geral.total|brl }}</strong></a>
+  {% if qtd_vencidos %}<a class="chip perigo{% if filtro == 'vencidos' %} ativo{% endif %}" href="?ver=vencidos{% if contrato_sel %}&contrato={{ contrato_sel.pk }}{% endif %}"><small>Vencidos ({{ qtd_vencidos }})</small><strong>{{ geral.vencido|brl }}</strong></a>{% endif %}
+  {% for m in meses %}<a class="chip{% if filtro == m.chave %} ativo{% endif %}" href="?ver={{ m.chave }}{% if contrato_sel %}&contrato={{ contrato_sel.pk }}{% endif %}"><small>Vence em {{ m.mes|date:"m/Y" }} ({{ m.quantidade }})</small><strong>{{ m.total|brl }}</strong></a>{% endfor %}
+</nav>
+<form method="get" class="filtros" style="margin-top:10px">
+  {% if filtro %}<input type="hidden" name="ver" value="{{ filtro }}">{% endif %}
   <select class="input select" name="contrato" aria-label="Contrato" data-auto-submit>
     <option value="">Todos os contratos</option>
     {% for c in contratos %}<option value="{{ c.pk }}"{% if contrato_sel and contrato_sel.pk == c.pk %} selected{% endif %}>{{ c.numero }} · {{ c.cliente|truncatechars:30 }}</option>{% endfor %}
   </select>
-  <select class="input select" name="situacao" aria-label="Situação" data-auto-submit>
-    <option value="">Vencidos e a vencer</option>
-    <option value="vencidos"{% if situacao == "vencidos" %} selected{% endif %}>Somente vencidos</option>
-    <option value="a_vencer"{% if situacao == "a_vencer" %} selected{% endif %}>Somente a vencer</option>
-  </select>
-  <a class="btn btn-sm{% if not mes %} btn-primario{% else %} btn-fantasma{% endif %}" href="?mes=todos">Todos os meses</a>
 </form>
 
-<div class="grid g-4" style="margin-top:16px">
-  <div class="card kpi"><span class="rotulo">{% icone "wallet" 16 %}A receber{% if mes %} · {{ mes|date:"m/Y" }}{% endif %}</span><span class="valor">{{ total|brl }}</span><span class="xs muted">{{ linhas|length }} recebível(is)</span></div>
-  <div class="card kpi{% if vencido %} alerta{% endif %}"><span class="rotulo">{% icone "alert" 16 %}Vencido</span><span class="valor">{{ vencido|brl }}</span><a class="xs" href="?situacao=vencidos{% if mes %}&mes={{ mes|date:'Y-m' }}{% else %}&mes=todos{% endif %}&base={{ base }}">ver vencidos</a></div>
-  <div class="card kpi"><span class="rotulo">{% icone "clock" 16 %}A vencer</span><span class="valor">{{ a_vencer|brl }}</span></div>
-  <div class="card kpi"><span class="rotulo">{% icone "check" 16 %}Recebido em {{ referencia|date:"m/Y" }}</span><span class="valor">{{ recebido_mes.total|brl }}</span><span class="xs muted">{{ recebido_mes.quantidade }} baixa(s) no mês</span></div>
-</div>
+<form method="post" id="form-baixa">{% csrf_token %}
+  {% for g in grupos %}
+  <div class="grupo-cab"><h3>{% if g.vencido %}Vencidos{% else %}Vencem em {{ g.titulo }}{% endif %}</h3><span class="mono">{{ g.total|brl }}</span></div>
+  {% for x in g.linhas %}
+  <div class="recebivel">
+    {% if pode_baixar %}<input type="checkbox" name="selecionados" value="{{ x.obj.pk }}" aria-label="Selecionar para baixa em lote">{% else %}<span></span>{% endif %}
+    <div>
+      <a href="{% if x.obj.nota_fiscal_id %}{% url 'fiscal:nota_detalhe' x.obj.nota_fiscal_id %}{% else %}{% url 'financeiro:lancamento_detalhe' x.obj.pk %}{% endif %}"><strong>{{ x.obj.descricao|truncatechars:70 }}</strong></a>
+      <div class="meta">{% if x.contrato %}Contrato {{ x.contrato.numero }} · {% endif %}competência {{ x.competencia|date:"m/Y" }} · vence {{ x.obj.data_vencimento|date:"d/m/Y" }}{% if x.vencido %} · <span style="color:var(--danger);font-weight:600">{{ x.dias }} dia(s) em atraso</span>{% endif %}</div>
+    </div>
+    <span class="valor">{{ x.obj.valor|brl }}</span>
+    {% if pode_baixar %}<div class="acao linha" style="gap:6px;flex-wrap:nowrap">
+      <input class="input" style="width:130px" name="ob_{{ x.obj.pk }}" placeholder="nº da OB" aria-label="Número da ordem bancária">
+      <button class="btn btn-sm btn-primario" name="unico" value="{{ x.obj.pk }}" type="submit">{% icone "check" 14 %} Recebido</button>
+    </div>{% endif %}
+  </div>
+  {% endfor %}
+  {% empty %}
+  {% empty_state "Nada a receber com este filtro." %}
+  {% endfor %}
 
-<div class="grid g-2" style="margin-top:16px">
-  <section class="card">
-    <h3>Por faixa de atraso</h3>
-    <div class="tabela-wrap"><table class="tabela"><tbody>{% for f in faixas %}<tr><td>{{ f.nome }}</td><td class="num mono">{{ f.quantidade }}</td><td class="num mono"><strong>{{ f.total|brl }}</strong></td></tr>{% endfor %}</tbody></table></div>
-  </section>
-  <section class="card">
-    <h3>Por mês de vencimento</h3>
-    {% for m in por_mes %}<div style="margin:6px 0"><div class="linha entre small"><a href="?mes={{ m.mes|date:'Y-m' }}&base=vencimento">{{ m.mes|date:"m/Y" }}</a><span class="mono">{{ m.total|brl }} · {{ m.quantidade }}</span></div><div style="height:6px;background:var(--borda,#e6eaf1);border-radius:3px"><div style="height:6px;width:{{ m.pct }}%;background:var(--primaria,#0016E1);border-radius:3px"></div></div></div>{% empty %}<p class="muted small">Nada em aberto.</p>{% endfor %}
-  </section>
-</div>
-
-<section class="card" style="margin-top:16px">
-  <h3>Por contrato</h3>
-  <div class="tabela-wrap responsiva"><table class="tabela">
-    <thead><tr><th>Contrato</th><th class="num">Recebíveis</th><th class="num">Vencido</th><th class="num">Total</th></tr></thead>
-    <tbody>{% for g in por_contrato %}<tr><td data-rotulo="Contrato">{% if g.contrato %}<a href="?contrato={{ g.contrato.pk }}&mes=todos">{{ g.contrato.numero }}</a> <span class="xs muted">{{ g.contrato.cliente|truncatechars:34 }}</span>{% else %}Sem contrato{% endif %}</td><td data-rotulo="Recebíveis" class="num mono">{{ g.quantidade }}</td><td data-rotulo="Vencido" class="num mono">{{ g.vencido|brl }}</td><td data-rotulo="Total" class="num mono"><strong>{{ g.total|brl }}</strong></td></tr>{% empty %}<tr><td colspan="4" class="muted">Nada em aberto.</td></tr>{% endfor %}</tbody>
-  </table></div>
-</section>
-
-<form method="post" class="card" style="margin-top:16px" id="form-baixa">{% csrf_token %}
-  <div class="linha entre" style="flex-wrap:wrap;gap:10px">
-    <h3 style="margin:0">Recebíveis ({{ linhas|length }})</h3>
-    {% if pode_baixar and linhas %}
-    <div class="linha" style="gap:8px;flex-wrap:wrap">
-      <input class="input" type="date" name="data_pagamento" value="{{ hoje|date:'Y-m-d' }}" aria-label="Data do recebimento" required>
+  {% if pode_baixar and linhas %}
+  <div class="barra-lote">
+    <span class="small"><strong>Recebimento:</strong> data, conta e forma valem para “Recebido” e para os selecionados.</span>
+    <div class="linha" style="gap:8px">
+      <input class="input" type="date" name="data_pagamento" value="{{ hoje|date:'Y-m-d' }}" max="{{ hoje|date:'Y-m-d' }}" aria-label="Data do recebimento" required>
       <select class="input select" name="conta_bancaria" aria-label="Conta">{% for c in contas %}<option value="{{ c.pk }}">{{ c.nome }}</option>{% endfor %}</select>
       <select class="input select" name="forma_pagamento" aria-label="Forma">{% for v, r in formas %}<option value="{{ v }}"{% if v == "OB" %} selected{% endif %}>{{ r }}</option>{% endfor %}</select>
-      <button class="btn btn-primario" type="submit" data-confirmar="Os recebíveis selecionados serão baixados (integralmente) na data e conta informadas." data-confirmar-titulo="Registrar recebimentos?" data-confirmar-botao="Registrar" data-confirmar-perigo="0">{% icone "check" 16 %} Marcar selecionados como recebidos</button>
+      <button class="btn" type="submit" data-confirmar="Os recebíveis marcados serão baixados integralmente na data e conta informadas." data-confirmar-titulo="Marcar selecionados como recebidos?" data-confirmar-botao="Confirmar" data-confirmar-perigo="0">{% icone "check-square" 16 %} Marcar selecionados</button>
     </div>
-    {% endif %}
   </div>
-  {% if pode_baixar and linhas %}<p class="xs muted" style="margin:6px 0 0">Para ordem bancária, informe o número da OB em cada linha selecionada.</p>{% endif %}
-  <div class="tabela-wrap responsiva" style="margin-top:10px"><table class="tabela">
-    <thead><tr>{% if pode_baixar %}<th><input type="checkbox" aria-label="Selecionar todos" onclick="document.querySelectorAll('input[name=selecionados]').forEach(c=>c.checked=this.checked)"></th>{% endif %}<th>Vencimento</th><th>Competência</th><th>Descrição</th><th>Contrato</th><th class="num">Valor</th>{% if pode_baixar %}<th>OB</th>{% endif %}</tr></thead>
-    <tbody>{% for x in linhas %}<tr>
-      {% if pode_baixar %}<td><input type="checkbox" name="selecionados" value="{{ x.obj.pk }}" aria-label="Selecionar"></td>{% endif %}
-      <td data-rotulo="Vencimento" class="mono">{{ x.obj.data_vencimento|data_br }}<br>{% if x.vencido %}{% status_badge "danger" rotulo=x.dias|stringformat:"d"|add:" dias" %}{% else %}<span class="xs muted">a vencer</span>{% endif %}</td>
-      <td data-rotulo="Competência" class="mono">{{ x.competencia|date:"m/Y" }}</td>
-      <td data-rotulo="Descrição"><a href="{% url 'financeiro:lancamento_detalhe' x.obj.pk %}">{{ x.obj.descricao|truncatechars:60 }}</a>{% if x.obj.nota_fiscal_id %} · <a class="xs" href="{% url 'fiscal:nota_detalhe' x.obj.nota_fiscal_id %}">nota</a>{% endif %}</td>
-      <td data-rotulo="Contrato">{% if x.contrato %}{{ x.contrato.numero }}{% else %}—{% endif %}</td>
-      <td data-rotulo="Valor" class="num mono"><strong>{{ x.obj.valor|brl }}</strong></td>
-      {% if pode_baixar %}<td data-rotulo="OB"><input class="input" style="min-width:120px" name="ob_{{ x.obj.pk }}" placeholder="nº da OB" aria-label="Número da OB"></td>{% endif %}
-    </tr>{% empty %}<tr><td colspan="7">{% empty_state "Nenhum recebível em aberto com estes filtros." %}</td></tr>{% endfor %}</tbody>
-    {% if linhas %}<tfoot><tr>{% if pode_baixar %}<td></td>{% endif %}<td colspan="4"><strong>Total</strong></td><td class="num mono"><strong>{{ total|brl }}</strong></td>{% if pode_baixar %}<td></td>{% endif %}</tr></tfoot>{% endif %}
-  </table></div>
+  {% endif %}
 </form>
+
+{% if geral.por_contrato|length > 1 %}
+<details class="card" style="margin-top:16px">
+  <summary style="cursor:pointer"><strong>Total por contrato</strong></summary>
+  <div class="tabela-wrap responsiva" style="margin-top:10px"><table class="tabela">
+    <thead><tr><th>Contrato</th><th class="num">Notas</th><th class="num">Vencido</th><th class="num">Total</th></tr></thead>
+    <tbody>{% for g in geral.por_contrato %}<tr><td data-rotulo="Contrato">{% if g.contrato %}<a href="?contrato={{ g.contrato.pk }}">{{ g.contrato.numero }}</a> <span class="xs muted">{{ g.contrato.cliente|truncatechars:30 }}</span>{% else %}Sem contrato{% endif %}</td><td data-rotulo="Notas" class="num mono">{{ g.quantidade }}</td><td data-rotulo="Vencido" class="num mono">{{ g.vencido|brl }}</td><td data-rotulo="Total" class="num mono"><strong>{{ g.total|brl }}</strong></td></tr>{% endfor %}</tbody>
+  </table></div>
+</details>
+{% endif %}
 {% endblock %}

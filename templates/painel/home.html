@@ -4,8 +4,8 @@
 {% block subtitulo %}<p class="sub">Visão geral da KS TEC.</p>{% endblock %}
 {% block conteudo %}
 <div class="grid g-4">
-  {% kpi_card "Faturado no mês (competência)" faturado_mes icone_nome="receipt" link=link_faturado %}
-  {% kpi_card "A receber" a_receber alerta=tem_vencido icone_nome="wallet" link=link_a_receber %}
+  {% kpi_card "Faturado no mês" faturado_mes icone_nome="receipt" link=link_faturado detalhe=detalhe_faturado %}
+  {% kpi_card "A receber" a_receber alerta=tem_vencido icone_nome="wallet" link=link_a_receber detalhe=detalhe_a_receber %}
   {% kpi_card "Resultado do mês" resultado_mes icone_nome="trending-up" %}
   {% kpi_card "Disponibilidade (30d)" disponibilidade formato="pct" icone_nome="activity" %}
 </div>
