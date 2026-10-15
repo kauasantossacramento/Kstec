@@ -1,0 +1,40 @@
+{% extends "pdf/_base.html" %}{% block titulo_cab %}Recibo de prestação de serviços{% endblock %}{% block sub_cab %}NFS-e nº {{ nota.numero_nfse }}{% endblock %}
+{% block estilo %}
+.valor-box { display: flex; justify-content: space-between; align-items: center; border: 2px solid #061534; border-radius: 8pt; padding: 10pt 14pt; margin: 6pt 0 14pt; }
+.valor-box .rot { font-size: 9pt; text-transform: uppercase; letter-spacing: .06em; color: #5b6478; font-weight: bold; }
+.valor-box .val { font-size: 22pt; font-weight: bold; font-family: "DejaVu Sans Mono", monospace; }
+.texto { font-size: 11pt; line-height: 1.7; text-align: justify; }
+.pagamento { display: flex; gap: 14pt; align-items: center; border: 1px solid #D6DCE7; border-radius: 6pt; padding: 10pt 12pt; background: #F4F6FA; margin-top: 12pt; }
+.pagamento img { width: 120pt; height: 120pt; }
+.pagamento .cc { font: 7pt "DejaVu Sans Mono", monospace; word-break: break-all; color: #3b4456; margin-top: 4pt; }
+.quitado { border: 2px solid #16A34A; color: #16A34A; font-weight: bold; text-align: center; padding: 6pt; border-radius: 6pt; margin-top: 12pt; }
+{% endblock %}
+{% block conteudo %}
+<h1>Recibo de prestação de serviços</h1>
+<div class="valor-box"><span class="rot">Valor</span><span class="val">{{ valor|brl }}</span></div>
+<p class="texto">
+  A <strong>{{ empresa.razao_social }}</strong>, inscrita no CNPJ sob o nº <strong>{{ empresa.cnpj_formatado }}</strong>,
+  declara que prestou a <strong>{{ tomador }}</strong>{% if documento_tomador %}, {{ documento_tomador }}{% endif %}, os serviços de
+  {{ descricao|default:"prestação de serviços"|truncatechars:700 }}, referentes à competência <strong>{{ competencia }}</strong>,
+  no valor de <strong>{{ valor|brl }}</strong> ({{ valor_extenso }}), conforme a Nota Fiscal de Serviço eletrônica
+  nº <strong>{{ nota.numero_nfse }}</strong>, emitida em {{ nota.autorizada_em|date:"d/m/Y" }}{% if nota.contrato %}, no âmbito do contrato {{ nota.contrato.numero }}{% endif %}{% if retencoes %} (valor líquido após retenções de {{ retencoes|brl }}){% endif %}.
+</p>
+{% if pago %}
+<p class="texto">Declara, ainda, ter recebido a referida importância em <strong>{{ lancamento.data_pagamento|date:"d/m/Y" }}</strong>{% if lancamento.get_forma_pagamento_display %}, por {{ lancamento.get_forma_pagamento_display|lower }}{% endif %}, dando plena e geral quitação.</p>
+<div class="quitado">PAGAMENTO RECEBIDO EM {{ lancamento.data_pagamento|date:"d/m/Y" }}</div>
+{% else %}
+<p class="texto">A quitação dar-se-á com a confirmação do pagamento{% if lancamento %}, com vencimento em <strong>{{ lancamento.data_vencimento|date:"d/m/Y" }}</strong>{% endif %}, por meio dos dados abaixo.</p>
+<div class="pagamento">
+  {% if pix_qr %}<img src="{{ pix_qr }}" alt="QR Code PIX">{% endif %}
+  <div>
+    <strong>Dados para pagamento</strong><br>
+    Chave PIX (CNPJ): <strong>{{ chave_pix_formatada }}</strong><br>
+    Favorecido: {{ empresa.razao_social }} · CNPJ {{ empresa.cnpj_formatado }}<br>
+    {% if conta %}{{ conta.nome }}{% if conta.banco_codigo %} (banco {{ conta.banco_codigo }}){% endif %}<br>{% endif %}
+    Valor: <strong>{{ valor|brl }}</strong>{% if lancamento %} · vencimento {{ lancamento.data_vencimento|date:"d/m/Y" }}{% endif %}
+    {% if pix_copia_cola %}<div class="cc">PIX copia e cola: {{ pix_copia_cola }}</div>{% endif %}
+  </div>
+</div>
+{% endif %}
+{% include "pdf/_assinatura.html" %}
+{% endblock %}

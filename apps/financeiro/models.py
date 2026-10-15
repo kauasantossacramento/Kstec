@@ -77,6 +77,8 @@ class ContaBancaria(ModeloBase):
     banco_codigo = models.CharField("código do banco", max_length=10, blank=True)
     agencia = models.CharField("agência", max_length=20, blank=True)
     conta = models.CharField(max_length=30, blank=True)
+    chave_pix = models.CharField("chave PIX", max_length=77, blank=True,
+                                 help_text="CNPJ, e-mail, telefone (+55…) ou chave aleatória. Aparece em recibos e cobranças.")
     saldo_inicial = models.DecimalField(**DINHEIRO, default=0)
     data_saldo_inicial = models.DateField(default=timezone.localdate)
 

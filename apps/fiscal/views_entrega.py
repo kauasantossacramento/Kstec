@@ -211,3 +211,26 @@ def emails(request):
         "pode_verificar": pode_escrever(request.user, ["Fiscal", "Financeiro"]),
         "total_respostas": RespostaEmail.objects.filter(empresa=request.empresa, tipo="RESPOSTA").count(),
         "total_devolucoes": RespostaEmail.objects.filter(empresa=request.empresa, tipo="DEVOLUCAO").count()})
+
+
+@login_required
+def recibo(request, pk):
+    """Recibo de prestação de serviços da nota (PDF assinado, com PIX). ?novo=1 gera nova via (ex.: após a baixa)."""
+    from apps.core.models import Anexo
+
+    from .services import recibo as srv
+
+    _leitura(request)
+    nota = get_object_or_404(NotaFiscal, pk=pk, empresa=request.empresa)
+    existente = (Anexo.objects.filter(empresa=request.empresa, object_id=str(nota.pk), nome=f"recibo_nfse_{nota.numero_nfse}.pdf")
+                 .order_by("-criado_em").first())
+    if existente is None or request.GET.get("novo"):
+        try:
+            existente = srv.gerar(nota)
+        except ValidationError as erro:
+            messages.error(request, "; ".join(erro.messages))
+            return redirect("fiscal:nota_detalhe", pk=pk)
+    resposta = HttpResponse(existente.ler(), content_type="application/pdf")
+    disposicao = "attachment" if request.GET.get("baixar") else "inline"
+    resposta["Content-Disposition"] = f'{disposicao}; filename="{existente.nome}"'
+    return resposta
