@@ -29,11 +29,21 @@ def ciclo(ciclo, titulo, texto, confirmar=False):
     return admin(ciclo.empresa, corpo, chave=f"ciclo:{ciclo.pk}:{ciclo.status}")
 
 
+def monitoramento(empresa, texto, chave=""):
+    """Avisos do monitoramento (SSL, lentidão, verificação externa) ao administrador."""
+    config = config_de(empresa)
+    if not config.ativo or not config.alertas_monitoramento:
+        return []
+    return admin(empresa, texto, chave=chave)
+
+
 def sistema(sistema, caiu, detalhe=""):
     config = config_de(sistema.empresa)
     if not config.ativo or not config.alertas_monitoramento:
         return []
-    if caiu:
+    if caiu and detalhe.startswith("Certificado SSL"):
+        texto = f"🔐 *{sistema.nome} inacessível: certificado SSL*\n{detalhe}\n{sistema.url}"
+    elif caiu:
         texto = f"🔴 *{sistema.nome} fora do ar*\n{detalhe}\n{sistema.url}"
     else:
         texto = f"🟢 *{sistema.nome} voltou*\n{detalhe}"

@@ -94,7 +94,9 @@ def test_queda_so_local_nao_alerta_quando_uptimerobot_ve_no_ar(empresa, sistema,
     config.save()
     sistema.uptimerobot_id = "801"
     sistema.save()
-    fora = httpx.MockTransport(lambda r: httpx.Response(503))
+    def recusada(request):
+        raise httpx.ConnectError("[Errno 111] Connection refused")
+    fora = httpx.MockTransport(recusada)
     consultas = []
 
     def no_ar(s):
@@ -112,6 +114,8 @@ def test_queda_so_local_nao_alerta_quando_uptimerobot_ve_no_ar(empresa, sistema,
     with django_capture_on_commit_callbacks(execute=True):
         s = monitor.verificar(s, fora, externo=lambda _s: uptimerobot.FORA)
     assert s.status == "FORA" and Incidente.objects.filter(status="ABERTO").count() == 1
+    # Erro HTTP (ex.: 503) é falha real do sistema: não depende do UptimeRobot.
+    assert not monitor.falha_de_rede("HTTP 503 (esperado 200)") and monitor.falha_de_rede("Sem resposta em 15s")
 
 
 def test_falso_positivo_sai_do_uptime_e_do_sla(empresa, sistema):
@@ -296,3 +300,78 @@ def test_telas_mostram_email_da_agenda_e_falso_positivo(cli, cenario, sistema, e
     Incidente.objects.create(empresa=empresa, sistema=sistema, inicio=timezone.now(), fim=timezone.now(), status="FECHADO")
     detalhe = cli.get(reverse("sla:sistema_detalhe", args=[sistema.pk])).content.decode()
     assert "Marcar como falso positivo" in detalhe and "fonte: Monitor KS CENTRAL" in detalhe
+
+
+# ---------------------------------------------------------------------------
+# Alertas no WhatsApp: SSL, lentidão e verificação externa
+# ---------------------------------------------------------------------------
+
+@pytest.fixture
+def whatsapp(empresa):
+    config = fila.config_de(empresa)
+    config.ativo, config.numeros_admin = True, ADMIN
+    config.save()
+    return config
+
+
+def textos_admin():
+    return list(MensagemWhatsApp.objects.filter(para_admin=True).values_list("texto", flat=True))
+
+
+def test_ssl_invalido_vira_queda_com_motivo_sem_consultar_uptimerobot(sistema, whatsapp, django_capture_on_commit_callbacks):
+    def expirado(request):
+        raise httpx.ConnectError("[SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: certificate has expired")
+    sistema.uptimerobot_id = "801"
+    sistema.save()
+    consultas = []
+    s = monitor.verificar(sistema, httpx.MockTransport(expirado), externo=lambda x: consultas.append(x) or uptimerobot.NO_AR)
+    with django_capture_on_commit_callbacks(execute=True):
+        s = monitor.verificar(s, httpx.MockTransport(expirado), externo=lambda x: consultas.append(x) or uptimerobot.NO_AR)
+    assert consultas == [] and s.status == "FORA" and s.ultimo_erro == "Certificado SSL inválido: certificado expirado"
+    assert any("certificado SSL" in t and "expirado" in t for t in textos_admin())
+    def dns(request):
+        raise httpx.ConnectError("[Errno -2] Name or service not known")
+    assert monitor.checar(sistema, httpx.MockTransport(dns))[3] == "Falha de conexão: domínio não resolve (DNS)"
+
+
+def test_lentidao_alerta_apos_verificacoes_seguidas_e_normaliza(sistema, whatsapp, monkeypatch,
+                                                                django_capture_on_commit_callbacks):
+    tempos = iter([300, 9000, 300, 9000, 9000, 300, 300])
+    monkeypatch.setattr(monitor, "checar", lambda s, t=None: (True, 200, next(tempos), ""))
+    s = sistema
+    estados = []
+    for _ in range(7):
+        with django_capture_on_commit_callbacks(execute=True):
+            s = monitor.verificar(s)
+        estados.append(s.status)
+    # Uma resposta lenta isolada não alerta; duas seguidas sim; duas rápidas seguidas normalizam.
+    assert estados == ["OPERACIONAL", "OPERACIONAL", "OPERACIONAL", "OPERACIONAL", "DEGRADADO", "DEGRADADO", "OPERACIONAL"]
+    textos = textos_admin()
+    assert sum("lento" in t for t in textos) == 1 and sum("normalizado" in t for t in textos) == 1
+    assert not Incidente.objects.exists()
+
+
+def test_certificado_perto_de_vencer_e_invalido_avisam_no_whatsapp(sistema, whatsapp):
+    import ssl
+
+    agora = timezone.now()
+    monitor.verificar_ssl_todos(agora, consultar=lambda url: agora + timedelta(days=7, hours=2))
+    monitor.verificar_ssl_todos(agora, consultar=lambda url: agora + timedelta(days=7, hours=2))  # mesmo dia: sem repetir
+    monitor.verificar_ssl_todos(agora + timedelta(days=1), consultar=lambda url: agora + timedelta(days=7, hours=2))  # 6 dias
+    assert [t for t in textos_admin() if "SSL" in t] == [t for t in textos_admin() if "vence em 7 dias" in t]
+    assert len([t for t in textos_admin() if "SSL" in t]) == 1
+
+    def invalido(url):
+        raise ssl.SSLCertVerificationError("certificate verify failed: Hostname mismatch")
+    monitor.verificar_ssl_todos(agora, consultar=invalido)
+    assert any("certificado SSL inválido" in t and "não corresponde ao domínio" in t for t in textos_admin())
+
+
+def test_queda_vista_so_pelo_uptimerobot_avisa(empresa, chave_ur, sistema, whatsapp):
+    uptimerobot.sincronizar(empresa, api_falsa([], status=2))
+    assert not textos_admin()
+    uptimerobot.sincronizar(empresa, api_falsa([], status=9))
+    uptimerobot.sincronizar(empresa, api_falsa([], status=2))
+    textos = textos_admin()
+    assert any("UptimeRobot: Nuvem Municipal fora do ar" in t for t in textos)
+    assert any("UptimeRobot: Nuvem Municipal voltou" in t for t in textos)

@@ -28,12 +28,48 @@ def checar(sistema, transporte=None):
     except httpx.TimeoutException:
         return False, None, None, f"Sem resposta em {sistema.timeout_s}s"
     except httpx.HTTPError as erro:
-        return False, None, None, f"Falha de conexão: {type(erro).__name__}"
+        return False, None, None, descrever_erro(erro)
     if resposta.status_code != sistema.status_esperado:
         return False, resposta.status_code, tempo, f"HTTP {resposta.status_code} (esperado {sistema.status_esperado})"
     if sistema.palavra_chave and sistema.metodo == "GET" and sistema.palavra_chave not in resposta.text:
         return False, resposta.status_code, tempo, "Texto esperado não encontrado na página"
     return True, resposta.status_code, tempo, ""
+
+
+MOTIVOS_SSL = [("expired", "certificado expirado"), ("hostname mismatch", "certificado não corresponde ao domínio"),
+               ("doesn't match", "certificado não corresponde ao domínio"), ("self-signed", "certificado autoassinado"),
+               ("self signed", "certificado autoassinado"), ("local issuer", "cadeia de certificados incompleta"),
+               ("not yet valid", "certificado ainda não válido")]
+MOTIVOS_REDE = [("name or service not known", "domínio não resolve (DNS)"), ("nodename nor servname", "domínio não resolve (DNS)"),
+                ("temporary failure in name resolution", "falha de DNS"), ("connection refused", "conexão recusada"),
+                ("network is unreachable", "rede inalcançável"), ("no route to host", "sem rota até o servidor"),
+                ("connection reset", "conexão interrompida pelo servidor")]
+PREFIXO_SSL = "Certificado SSL inválido"
+PREFIXOS_REDE = ("Falha de conexão", "Sem resposta")
+
+
+def descrever_erro(erro):
+    """Texto do erro de rede: certificado SSL (com o motivo) separado de falhas de conexão/DNS."""
+    texto = str(erro).lower()
+    if "certificate" in texto or "ssl" in texto:
+        motivo = next((m for chave, m in MOTIVOS_SSL if chave in texto), "falha na validação do certificado")
+        return f"{PREFIXO_SSL}: {motivo}"
+    motivo = next((m for chave, m in MOTIVOS_REDE if chave in texto), "")
+    return f"Falha de conexão: {motivo or type(erro).__name__}"
+
+
+def falha_de_rede(erro):
+    """Falhas que podem ser só do caminho entre os servidores (as que o UptimeRobot pode desmentir)."""
+    return (erro or "").startswith(PREFIXOS_REDE)
+
+
+def lentidao(sistema, n):
+    """True/False quando as últimas `n` verificações (incluindo esta) foram todas lentas/rápidas; None se misturadas."""
+    ultimas = list(sistema.verificacoes.order_by("-em").values_list("sucesso", "tempo_ms")[:n])
+    if len(ultimas) < n or not all(ok for ok, _ in ultimas):
+        return None
+    lentas = [bool(t and t > sistema.lento_ms) for _, t in ultimas]
+    return True if all(lentas) else False if not any(lentas) else None
 
 
 def confirmar_externo(sistema):
@@ -47,7 +83,7 @@ def verificar(sistema, transporte=None, agora=None, externo=None):
     agora = agora or timezone.now()
     sucesso, http, tempo, erro = checar(sistema, transporte)
     no_ar_externo = False
-    if not sucesso and sistema.uptimerobot_id and sistema.status != S.FORA \
+    if not sucesso and falha_de_rede(erro) and sistema.uptimerobot_id and sistema.status != S.FORA \
             and sistema.falhas_consecutivas + 1 >= sistema.falhas_para_alerta:
         from .uptimerobot import NO_AR
 
@@ -67,7 +103,12 @@ def verificar(sistema, transporte=None, agora=None, externo=None):
         s.ultima_verificacao, s.ultimo_tempo_ms, s.ultimo_erro = agora, tempo, erro[:300]
         if sucesso:
             s.falhas_consecutivas = 0
-            novo = S.DEGRADADO if tempo and tempo > s.lento_ms else S.OPERACIONAL
+            if anterior in (S.OPERACIONAL, S.DEGRADADO):
+                # Lentidão (e sua normalização) só muda o estado após N verificações seguidas no mesmo sentido.
+                seguidas = lentidao(s, s.falhas_para_alerta)
+                novo = S.DEGRADADO if seguidas is True else S.OPERACIONAL if seguidas is False else anterior
+            else:
+                novo = S.DEGRADADO if tempo and tempo > s.lento_ms else S.OPERACIONAL
         else:
             s.falhas_consecutivas += 1
             # Uma falha isolada não muda o estado: só alerta após N falhas seguidas (e, com UptimeRobot, se ele confirmar).
@@ -88,6 +129,10 @@ def verificar(sistema, transporte=None, agora=None, externo=None):
                 inc.fim, inc.status = agora, Incidente.Status.FECHADO
                 inc.save()
             evento = "retorno"
+        elif mudou and anterior == S.OPERACIONAL and novo == S.DEGRADADO:
+            evento = "lento"
+        elif mudou and anterior == S.DEGRADADO and novo == S.OPERACIONAL:
+            evento = "normalizado"
     if evento and not s.em_manutencao:
         transaction.on_commit(lambda: alertar(s, evento))
     return s
@@ -98,7 +143,28 @@ def duracao_texto(delta):
     return f"{minutos // 60} h {minutos % 60} min" if minutos >= 60 else f"{max(minutos, 1)} min"
 
 
+def alertar_desempenho(sistema, evento):
+    """Lentidão e normalização: aviso interno e WhatsApp do administrador (não vai por e-mail ao cliente)."""
+    from apps.mensageria.services import alertas
+
+    if evento == "lento":
+        titulo = f"{sistema.nome} lento"
+        detalhe = (f"Resposta de {sistema.ultimo_tempo_ms} ms nas últimas {sistema.falhas_para_alerta} verificações "
+                   f"(limite {sistema.lento_ms} ms).")
+        texto, nivel = f"🟡 *{titulo}*\n{detalhe}\n{sistema.url}", "warning"
+    else:
+        titulo, detalhe = f"{sistema.nome} normalizado", f"Tempo de resposta voltou ao normal ({sistema.ultimo_tempo_ms} ms)."
+        texto, nivel = f"🟢 *{titulo}*\n{detalhe}", "success"
+    chave = f"sla:{sistema.pk}:{evento}:{sistema.ultima_mudanca:%Y%m%d%H%M}"
+    notificar_papeis(["Administrador", "Operação"], titulo, detalhe, nivel=nivel, empresa=sistema.empresa,
+                     link=f"/sla/sistemas/{sistema.pk}/", chave_dedup=chave)
+    if sistema.alertar_whatsapp:
+        alertas.monitoramento(sistema.empresa, texto, chave=chave)
+
+
 def alertar(sistema, evento):
+    if evento in ("lento", "normalizado"):
+        return alertar_desempenho(sistema, evento)
     if evento == "queda":
         titulo, detalhe, nivel = f"{sistema.nome} fora do ar", sistema.ultimo_erro, "danger"
     else:
@@ -152,19 +218,43 @@ def ssl_expiracao(url, timeout=10):
     return datetime.strptime(validade, "%b %d %H:%M:%S %Y %Z").replace(tzinfo=UTC)
 
 
-def verificar_ssl_todos():
+AVISAR_SSL_DIAS = {30, 15, 7, 3}
+
+
+def verificar_ssl_todos(agora=None, consultar=None):
+    """Diário: validade do certificado. Avisa no WhatsApp com 30, 15, 7 e 3 dias e todo dia nos 2 últimos; e
+    também se o certificado já estiver inválido (expirado, domínio errado, cadeia incompleta)."""
+    from apps.mensageria.services import alertas
+
+    agora = agora or timezone.now()
     total = 0
-    for s in Sistema.objects.filter(ativo=True, url__startswith="https://"):
+    for s in Sistema.objects.filter(ativo=True, em_manutencao=False, url__startswith="https://"):
         try:
-            expira = ssl_expiracao(s.url)
-        except (OSError, ssl.SSLError, ValueError, KeyError):
+            expira = (consultar or ssl_expiracao)(s.url)
+        except ssl.SSLError as erro:
+            motivo = descrever_erro(erro)
+            chave = f"ssl-invalido:{s.pk}:{timezone.localdate(agora):%Y%m%d}"
+            notificar_papeis(["Administrador", "Operação"], f"{s.nome}: certificado SSL inválido", motivo, nivel="danger",
+                             empresa=s.empresa, link=f"/sla/sistemas/{s.pk}/", chave_dedup=chave)
+            if s.alertar_whatsapp:
+                alertas.monitoramento(s.empresa, f"🔐 *{s.nome}: certificado SSL inválido*\n{motivo}\n{s.url}", chave=chave)
+            continue
+        except (OSError, ValueError, KeyError):
             continue
         Sistema.objects.filter(pk=s.pk).update(ssl_expira_em=expira)
-        if expira and expira - timezone.now() < timedelta(days=15):
+        total += 1
+        if not expira:
+            continue
+        dias = (expira - agora).days
+        if dias < 15:
             notificar_papeis(["Administrador"], f"Certificado SSL de {s.nome} vence em breve",
                              f"Expira em {timezone.localtime(expira):%d/%m/%Y}.", nivel="warning", empresa=s.empresa,
                              chave_dedup=f"ssl:{s.pk}:{expira:%Y%m%d}", janela_dedup_horas=24 * 7)
-        total += 1
+        if s.alertar_whatsapp and (dias in AVISAR_SSL_DIAS or dias <= 2):
+            quando = "vence hoje" if dias <= 0 else "vence amanhã" if dias == 1 else f"vence em {dias} dias"
+            alertas.monitoramento(s.empresa, f"🔐 *Certificado SSL de {s.nome} {quando}*\n"
+                                             f"Validade: {timezone.localtime(expira):%d/%m/%Y %H:%M}\n{s.url}",
+                                  chave=f"ssl-vence:{s.pk}:{timezone.localdate(agora):%Y%m%d}")
     return total
 
 

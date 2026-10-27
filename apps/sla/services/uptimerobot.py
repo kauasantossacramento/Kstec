@@ -107,9 +107,33 @@ def sincronizar(empresa, transporte=None, agora=None):
             uptimerobot_id=str(m["id"]), ur_status=m.get("status"), ur_atualizado_em=agora,
             ur_uptimes=dict(zip(("1", "7", "30"), r1_7_30, strict=False)),
             ur_diario={d.isoformat(): v for (d, _, fim), v in zip(dias, diarios, strict=False) if _ts(fim) > criado})
+        avisar_mudanca(s, s.ur_status, m.get("status"), agora)
         total += 1
     ConfiguracaoAlertas.objects.filter(empresa=empresa).update(uptimerobot_erro="")
     return total
+
+
+def avisar_mudanca(sistema, anterior, novo, agora):
+    """Queda/retorno vistos pela verificação externa quando o monitor local não acusou (ex.: falha regional,
+    SSL ou conteúdo que só o UptimeRobot percebe). Se o local já marcou queda, o alerta dele basta."""
+    if anterior is None or anterior == novo or sistema.em_manutencao or sistema.status == Sistema.Status.FORA:
+        return
+    caiu = anterior == NO_AR and novo in (PARECE_FORA, FORA)
+    voltou = anterior in (PARECE_FORA, FORA) and novo == NO_AR
+    if not (caiu or voltou):
+        return
+    from apps.core.services.notificacoes import notificar_papeis
+    from apps.mensageria.services import alertas
+
+    titulo = f"UptimeRobot: {sistema.nome} " + ("fora do ar" if caiu else "voltou")
+    detalhe = ("A verificação externa (UptimeRobot) não alcança o sistema; o monitor do KS CENTRAL ainda responde."
+               if caiu else "A verificação externa (UptimeRobot) voltou a alcançar o sistema.")
+    chave = f"ur:{sistema.pk}:{novo}:{timezone.localtime(agora):%Y%m%d%H%M}"
+    notificar_papeis(["Administrador", "Operação"], titulo, detalhe, nivel="danger" if caiu else "success",
+                     empresa=sistema.empresa, link=f"/sla/sistemas/{sistema.pk}/", chave_dedup=chave)
+    if sistema.alertar_whatsapp:
+        alertas.monitoramento(sistema.empresa, ("🟠 *" if caiu else "🟢 *") + titulo + f"*\n{detalhe}\n{sistema.url}",
+                              chave=chave)
 
 
 def monitores(empresa, transporte=None):
