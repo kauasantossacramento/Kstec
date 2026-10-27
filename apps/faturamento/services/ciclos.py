@@ -310,6 +310,32 @@ def atualizar_por_nota(ciclo, usuario=None):
     return ciclo
 
 
+def nota_ao_admin(ciclo):
+    """NFS-e autorizada no WhatsApp do administrador: detalhamento, DANFSe e recibo com PIX (sem certidões)."""
+    from apps.core.templatetags.ks import brl
+    from apps.fiscal.services import recibo
+    from apps.fiscal.services.pdf_nfse import garantir_pdf
+    from apps.mensageria.services.fila import config_de, para_admins
+
+    nota = ciclo.nota
+    config = config_de(nota.empresa)
+    if not (config.ativo and config.admins):
+        return []
+    anexos = [garantir_pdf(nota), recibo.gerar(nota)]
+    from apps.financeiro.models import Lancamento
+
+    lanc = Lancamento.objects.filter(nota_fiscal=nota).exclude(status="CANCELADO").first()
+    vencimento = (lanc.data_vencimento if lanc else ciclo.data_vencimento)
+    texto = (f"🧾 *NFS-e {nota.numero_nfse} autorizada* · {ciclo.agenda.contrato.numero}\n"
+             f"Tomador: {nota.tomador}\nCompetência: {nota.competencia:%m/%Y} · emitida em "
+             f"{timezone.localtime(nota.autorizada_em):%d/%m/%Y}\n"
+             f"Valor: *{brl(nota.valor_servicos)}*" + (f" · líquido {brl(nota.valor_liquido)}"
+                                                      if nota.valor_liquido != nota.valor_servicos else "")
+             + f"\nVencimento: {vencimento:%d/%m/%Y}\n\n*Detalhamento (discriminação da nota):*\n{nota.discriminacao}\n\n"
+             "Seguem o PDF da nota (DANFSe) e o recibo de prestação de serviços com PIX, para encaminhar ao cliente.")
+    return para_admins(nota.empresa, texto, anexos, chave=f"nota-admin:{nota.pk}")
+
+
 def pos_autorizacao(ciclo):
     """PDF, cobrança Asaas e envio ao cliente. Falhas aqui não afetam a autorização fiscal."""
     from apps.fiscal.services.pdf_nfse import garantir_pdf
@@ -337,6 +363,11 @@ def pos_autorizacao(ciclo):
             passos.append(f"envio WhatsApp {lote.get_status_display().lower()}" if lote else "sem contato WhatsApp autorizado")
         except Exception as erro:  # noqa: BLE001
             passos.append(f"WhatsApp pendente: {erro}")
+    if ciclo.agenda.enviar_nota_admin:
+        try:
+            passos.append("NFS-e enviada ao seu WhatsApp" if nota_ao_admin(ciclo) else "WhatsApp inativo: NFS-e não enviada")
+        except Exception as erro:  # noqa: BLE001
+            passos.append(f"NFS-e ao WhatsApp pendente: {erro}")
     if ciclo.agenda.enviar_email:
         try:
             from apps.fiscal.services import envio_documentos

@@ -411,3 +411,20 @@ def test_nova_previa_substitui_pedido_e_mostra_proximas_emissoes(cenario):
     texto = MensagemWhatsApp.objects.get(chave=f"envio-docs:{novo.pk}").texto
     assert "Próximas emissões deste contrato" in texto and "27/11/2026 · competência 11/2026" in texto
     assert confirmacoes.responder(ciclo.empresa, antigo.codigo, True)[0] is None  # código antigo não vale mais
+
+
+def test_nota_autorizada_vai_ao_whatsapp_do_admin_sem_certidoes(cenario, monkeypatch):
+    from apps.faturamento.services import ciclos
+    from apps.fiscal.services import recibo
+
+    monkeypatch.setattr(recibo, "renderizar_pdf", lambda *a, **k: pdf_minimo())
+    ciclo, _, _ = cenario
+    ciclo.agenda.enviar_nota_admin = True
+    ciclo.agenda.save()
+    msgs = ciclos.nota_ao_admin(ciclo)
+    texto = msgs[0].texto
+    assert f"NFS-e {ciclo.nota.numero_nfse} autorizada" in texto and "Detalhamento" in texto
+    assert ciclo.nota.discriminacao in texto
+    nomes = [m.nome_arquivo for m in msgs[1:]]
+    assert len(nomes) == 2 and nomes[1].startswith("recibo_") and not any("certidao" in n for n in nomes)
+    assert ciclos.nota_ao_admin(ciclo) == []  # não repete

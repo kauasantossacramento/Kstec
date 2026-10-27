@@ -53,6 +53,9 @@ class AgendaFaturamento(ModeloBase):
                                    help_text="Emissões anteriores a esta data não são criadas automaticamente.")
     enviar_whatsapp = models.BooleanField("enviar nota ao cliente por WhatsApp", default=False)
     gerar_cobranca = models.BooleanField("gerar cobrança Asaas (link e PIX)", default=False)
+    enviar_nota_admin = models.BooleanField(
+        "enviar a NFS-e ao meu WhatsApp após autorização", default=False,
+        help_text="PDF da nota e recibo com PIX, com o detalhamento, para você encaminhar ao cliente. Sem certidões.")
     enviar_email = models.BooleanField(
         "enviar documentos por e-mail após autorização", default=False,
         help_text="Monta o e-mail com a nota, documentos e certidões e pede sua confirmação no WhatsApp antes de enviar.")

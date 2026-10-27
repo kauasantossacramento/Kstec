@@ -26,7 +26,7 @@ class AgendaForm(FormKS):
          ["referencia", "dia_emissao", "hora_emissao", "dia_util", "tipo_vencimento", "prazo_dias",
           "dia_vencimento", "inicio", "fim"]),
         ("Automação", "zap", "Quanto do processo o sistema faz sozinho. Você pode mudar a qualquer momento.",
-         ["modo", "aceite_automatico", "enviar_whatsapp", "gerar_cobranca", "enviar_email", "emails_envio",
+         ["modo", "aceite_automatico", "enviar_whatsapp", "gerar_cobranca", "enviar_nota_admin", "enviar_email", "emails_envio",
           "assunto_envio", "mensagem_envio", "observacoes"]),
     ]
     DESCRICOES = {
@@ -42,13 +42,13 @@ class AgendaForm(FormKS):
                     "aceite_automatico": "modo=AUTOMATICO", "emails_envio": "enviar_email=on",
                     "assunto_envio": "enviar_email=on", "mensagem_envio": "enviar_email=on"}
     LARGOS = {"contrato", "discriminacao", "observacoes", "aceite_automatico", "enviar_whatsapp", "gerar_cobranca",
-              "dia_util", "enviar_email", "emails_envio", "assunto_envio", "mensagem_envio"}
+              "dia_util", "enviar_nota_admin", "enviar_email", "emails_envio", "assunto_envio", "mensagem_envio"}
 
     class Meta:
         model = AgendaFaturamento
         fields = ["contrato", "item_catalogo", "perfil", "empenho", "valor", "discriminacao", "referencia",
                   "dia_emissao", "hora_emissao", "dia_util", "tipo_vencimento", "prazo_dias", "dia_vencimento",
-                  "inicio", "fim", "modo", "enviar_whatsapp", "gerar_cobranca", "enviar_email", "emails_envio",
+                  "inicio", "fim", "modo", "enviar_whatsapp", "gerar_cobranca", "enviar_nota_admin", "enviar_email", "emails_envio",
                   "assunto_envio", "mensagem_envio", "observacoes"]
         widgets = {"referencia": forms.RadioSelect, "tipo_vencimento": forms.RadioSelect, "modo": forms.RadioSelect,
                    "hora_emissao": forms.TimeInput(attrs={"type": "time"}, format="%H:%M"),
