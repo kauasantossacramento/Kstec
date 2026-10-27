@@ -387,3 +387,27 @@ def test_sla_local_informa_periodo_realmente_medido(empresa, sistema):
     linha = sla.apurar(sistema.contrato, date(2026, 10, 1))["sistemas"][0]
     assert linha["periodo"] == "09/10/2026 a 27/10/2026" and linha["intervalo_min"] == 5
     assert (linha["tempo_min_ms"], linha["pico_ms"]) == (900, 2700)
+
+
+def test_copia_da_planilha_repete_observacoes_com_mes_atualizado(db):
+    from apps.financeiro.services.custos import observacoes_da_competencia
+
+    base = "Competência 09/2026 — 4º mês de execução contratual. A empresa é optante pelo Simples Nacional."
+    assert observacoes_da_competencia(base, date(2026, 9, 1), date(2026, 10, 1)) == \
+        "Competência 10/2026 — 5º mês de execução contratual. A empresa é optante pelo Simples Nacional."
+    assert observacoes_da_competencia("Competência 11/2026 — 2º mês de execução.", date(2026, 11, 1), date(2027, 1, 1)) == \
+        "Competência 01/2027 — 4º mês de execução."
+
+
+def test_nova_previa_substitui_pedido_e_mostra_proximas_emissoes(cenario):
+    ciclo, _, _ = cenario
+    CicloFaturamento.objects.create(empresa=ciclo.empresa, agenda=ciclo.agenda, competencia=date(2026, 11, 1),
+                                    data_emissao=date(2026, 11, 27), data_vencimento=date(2026, 12, 27), valor=Decimal("1"))
+    antigo = envio_documentos.propor(ciclo)
+    novo = envio_documentos.propor(ciclo, substituir=True)
+    antigo.refresh_from_db()
+    assert antigo.status == "RECUSADA" and antigo.respondida_por == envio_documentos.SUBSTITUIDA
+    assert novo and novo.codigo != antigo.codigo
+    texto = MensagemWhatsApp.objects.get(chave=f"envio-docs:{novo.pk}").texto
+    assert "Próximas emissões deste contrato" in texto and "27/11/2026 · competência 11/2026" in texto
+    assert confirmacoes.responder(ciclo.empresa, antigo.codigo, True)[0] is None  # código antigo não vale mais

@@ -1,5 +1,6 @@
 """Composição mensal declarada, BDI e exportações da versão aprovada."""
 import io
+import re
 import zipfile
 from decimal import ROUND_HALF_UP, Decimal
 from xml.etree import ElementTree
@@ -31,12 +32,19 @@ def nova_planilha(contrato, competencia):
 
 
 @transaction.atomic
+def observacoes_da_competencia(texto, de, para):
+    """Observações da planilha base (texto que vai ao cliente) com a competência e o mês de execução atualizados."""
+    meses = (para.year - de.year) * 12 + para.month - de.month
+    texto = (texto or "").replace(f"{de:%m/%Y}", f"{para:%m/%Y}")
+    return re.sub(r"(\d+)º mês de execução", lambda m: f"{int(m.group(1)) + meses}º mês de execução", texto)
+
+
 def clonar_planilha(origem, competencia):
     """Rascunho da competência copiando modelo, parâmetros e itens da planilha aprovada anterior."""
     nova = nova_planilha(origem.contrato, competencia)
     for campo in (*PARAMETROS, "modelo"):
         setattr(nova, campo, getattr(origem, campo))
-    nova.observacoes = f"Competência {nova.competencia:%m/%Y}. Base: planilha aprovada de {origem.competencia:%m/%Y}."
+    nova.observacoes = observacoes_da_competencia(origem.observacoes, origem.competencia, nova.competencia)
     nova.save()
     for item in origem.itens.all():
         ItemCusto.objects.create(empresa=nova.empresa, planilha=nova, grupo=item.grupo, descricao=item.descricao,

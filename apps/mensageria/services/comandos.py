@@ -2,7 +2,7 @@
 
 import re
 import unicodedata
-from datetime import timedelta
+from datetime import date, timedelta
 from decimal import Decimal
 
 from django.db.models import Sum
@@ -23,6 +23,11 @@ AJUDA = """🤖 *KS CENTRAL* — comandos
 • *previsao* — recebimentos dos próximos 15 dias
 • *vencidos* — cobranças em atraso
 • *faturamento* — próximas emissões e pendências
+• *proximas* — emissões dos próximos 60 dias, por contrato
+• *contratos* — contratos vigentes, objeto e próxima emissão
+• *receber* — notas em aberto por competência
+• *recebido 10/2026* — dar baixa nas notas da competência
+• *recebido 136 10/2026* — só as do contrato (número ou nome)
 • *notas* — últimas NFS-e
 • *nota 123* — PDF e XML da NFS-e nº 123
 • *relatorio* — planilha com o resumo financeiro
@@ -106,6 +111,9 @@ def responder_admin(empresa, texto, telefone="", pergunta_original=None):
     m = re.match(r"^nota\s+(\d+)$", texto)
     if m:
         return cmd_nota(empresa, m.group(1))
+    m = RECEBIDO.match(texto)
+    if m:
+        return cmd_recebido(empresa, m.group("contrato"), int(m.group("mes")), int(m.group("ano")), m.group("forma"))
     comando = texto.split(" ")[0] if texto else ""
     if comando not in ("ajuda", "menu", "?", "pausar", "retomar") and pergunta_original is not None:
         from . import assistente
@@ -115,12 +123,119 @@ def responder_admin(empresa, texto, telefone="", pergunta_original=None):
             return resposta
     tabela = {"status": cmd_status, "sistemas": cmd_status, "financeiro": cmd_financeiro, "resumo": cmd_financeiro,
               "previsao": cmd_previsao, "recebimentos": cmd_previsao, "vencidos": cmd_vencidos,
-              "faturamento": cmd_faturamento, "notas": cmd_notas, "relatorio": cmd_relatorio, "planilha": cmd_relatorio,
+              "faturamento": cmd_faturamento, "proximas": cmd_proximas, "emissoes": cmd_proximas,
+              "contratos": cmd_contratos, "receber": cmd_receber, "abertos": cmd_receber, "notas": cmd_notas, "relatorio": cmd_relatorio, "planilha": cmd_relatorio,
               "pausar": cmd_pausar, "retomar": cmd_retomar}
     if comando in tabela:
         return tabela[comando](empresa)
     return [AJUDA if comando in ("ajuda", "menu", "oi", "ola", "help", "?", "") else
             "Não entendi. Envie *ajuda* para ver os comandos."], []
+
+
+RECEBIDO = re.compile(r"^recebid[oa]s?\s+(?:(?P<contrato>\S+)\s+)?(?P<mes>\d{1,2})/(?P<ano>\d{4})"
+                      r"(?:\s+(?P<forma>pix|ted|transferencia|boleto|dinheiro))?$")
+FORMAS = {"pix": "PIX", "ted": "TED", "transferencia": "TED", "boleto": "BOLETO", "dinheiro": "DINHEIRO"}
+
+
+def resumo_objeto(contrato, limite=70):
+    texto = re.split(r"\s[—–-]\s|[.;:]", contrato.objeto or "", maxsplit=1)[0].strip()
+    return texto if len(texto) <= limite else texto[:limite - 1].rstrip() + "…"
+
+
+def cmd_proximas(empresa, dias=60):
+    from apps.faturamento.models import CicloFaturamento as C
+
+    hoje = timezone.localdate()
+    ciclos = C.objects.filter(empresa=empresa, data_emissao__range=(hoje, hoje + timedelta(days=dias))) \
+        .exclude(status__in=["PULADO", "AUTORIZADO"]).select_related("agenda__contrato__cliente").order_by("data_emissao")
+    if not ciclos:
+        return [f"Sem emissões programadas nos próximos {dias} dias."], []
+    linhas = [f"• *{c.data_emissao:%d/%m}* · {c.agenda.contrato.numero} — {resumo_objeto(c.agenda.contrato)}\n"
+              f"   {c.agenda.contrato.cliente} · comp. {c.competencia:%m/%Y} · {brl(c.valor)}"
+              + ("" if c.status == "PROGRAMADO" else f" · _{c.get_status_display().lower()}_") for c in ciclos]
+    total = sum((c.valor for c in ciclos), Decimal("0"))
+    return [f"📅 *Próximas emissões · {dias} dias*\n" + "\n".join(linhas) + f"\n\nTotal previsto: *{brl(total)}*"], []
+
+
+def cmd_contratos(empresa):
+    from apps.contratos.models import Contrato
+    from apps.faturamento.models import CicloFaturamento as C
+
+    hoje = timezone.localdate()
+    contratos = Contrato.objects.filter(empresa=empresa, status="VIGENTE").select_related("cliente").order_by("numero")
+    if not contratos:
+        return ["Nenhum contrato vigente."], []
+    linhas = []
+    for c in contratos:
+        prox = C.objects.filter(agenda__contrato=c, data_emissao__gte=hoje, status__in=["PROGRAMADO", "AGUARDANDO"]) \
+            .order_by("data_emissao").first()
+        linhas.append(f"• *{c.numero}* — {resumo_objeto(c)}\n   {c.cliente}"
+                      + (f" · {brl(c.valor_mensal)}/mês" if c.valor_mensal else "")
+                      + f" · vigência até {c.vigencia_fim_atual:%d/%m/%Y}"
+                      + (f"\n   próxima emissão {prox.data_emissao:%d/%m/%Y} (comp. {prox.competencia:%m/%Y})" if prox else ""))
+    return [f"📑 *Contratos vigentes* ({len(linhas)})\n" + "\n".join(linhas)], []
+
+
+def _abertos_por_competencia(empresa, ano=None, mes=None, contrato=None):
+    from apps.financeiro.services import indicadores
+
+    itens = [x for x in indicadores.abertos(empresa).order_by("data_vencimento")
+             if ano is None or indicadores.competencia_de(x) == date(ano, mes, 1)]
+    if contrato:
+        termo = normalizar(contrato)
+        itens = [x for x in itens if (ct := indicadores.contrato_de(x)) and (
+            normalizar(ct.numero).startswith(termo) or termo in normalizar(str(ct.cliente)) or termo in normalizar(ct.objeto))]
+    return itens
+
+
+def _linha_recebivel(x):
+    from apps.financeiro.services import indicadores
+
+    ct = indicadores.contrato_de(x)
+    nota = f"NFS-e {x.nota_fiscal.numero_nfse} · " if x.nota_fiscal_id and x.nota_fiscal.numero_nfse else ""
+    return (f"• {ct.numero if ct else (x.pessoa or x.descricao[:30])} · {nota}{brl(x.valor)} · vence {x.data_vencimento:%d/%m}"
+            + (" ⚠️" if x.data_vencimento < timezone.localdate() else ""))
+
+
+def cmd_receber(empresa):
+    from apps.financeiro.services import indicadores
+
+    itens = _abertos_por_competencia(empresa)
+    if not itens:
+        return ["✅ Nenhuma nota em aberto."], []
+    grupos = {}
+    for x in itens:
+        grupos.setdefault(indicadores.competencia_de(x), []).append(x)
+    blocos = []
+    for comp in sorted(grupos):
+        soma = sum((x.valor for x in grupos[comp]), Decimal("0"))
+        blocos.append(f"*{comp:%m/%Y}* · {brl(soma)}\n" + "\n".join(_linha_recebivel(x) for x in grupos[comp]))
+    total = sum((x.valor for x in itens), Decimal("0"))
+    return [f"💰 *A receber* · {brl(total)} ({len(itens)} nota(s))\n\n" + "\n\n".join(blocos)
+            + "\n\nPara dar baixa: *recebido 10/2026* (toda a competência) ou *recebido 136 10/2026* (só o contrato). "
+              "Peço sua confirmação antes."], []
+
+
+def cmd_recebido(empresa, contrato, mes, ano, forma=None):
+    if not 1 <= mes <= 12:
+        return ["Competência inválida. Ex.: *recebido 10/2026*."], []
+    itens = _abertos_por_competencia(empresa, ano, mes, contrato)
+    if not itens:
+        alvo = f" do contrato {contrato}" if contrato else ""
+        return [f"Nenhuma nota em aberto{alvo} na competência {mes:02d}/{ano}. Envie *receber* para ver as abertas."], []
+    forma = FORMAS.get(forma or "", "TED")
+    total = sum((x.valor for x in itens), Decimal("0"))
+    c = confirmacoes.criar(empresa, "financeiro.receber", itens[0], f"Baixa de {len(itens)} recebível(is) da competência "
+                           f"{mes:02d}/{ano} · {brl(total)}", horas=24,
+                           dados={"ids": [str(x.pk) for x in itens], "forma": forma})
+    hoje = timezone.localdate()
+    return [f"💰 *Confirmar recebimento* · competência {mes:02d}/{ano}\n" + "\n".join(_linha_recebivel(x) for x in itens)
+            + f"\n\nTotal: *{brl(total)}* · recebido em {hoje:%d/%m/%Y} · {FORMAS_ROTULO.get(forma, forma)}"
+            + f"\n\nResponda *SIM {c.codigo}* para dar baixa ou *NAO {c.codigo}* para cancelar."
+            + "\n_Outra forma: acrescente pix, ted, boleto ou dinheiro ao comando (ex.: recebido 10/2026 pix)._"], []
+
+
+FORMAS_ROTULO = {"PIX": "PIX", "TED": "transferência", "BOLETO": "boleto", "DINHEIRO": "dinheiro"}
 
 
 def cmd_status(empresa):

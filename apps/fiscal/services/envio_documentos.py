@@ -190,12 +190,26 @@ def _ja_proposto(nota, agora):
 
     c = Confirmacao.objects.filter(empresa=nota.empresa, acao=ACAO, objeto_id=str(nota.pk))
     St = Confirmacao.Status
-    return c.filter(status__in=[St.PENDENTE, St.CONFIRMADA, St.RECUSADA]).exists() \
+    return c.filter(status__in=[St.PENDENTE, St.CONFIRMADA]).exists() \
+        or c.filter(status=St.RECUSADA).exclude(respondida_por__startswith=SUBSTITUIDA).exists() \
         or c.filter(status=St.EXPIRADA, expira_em__gte=agora - timedelta(hours=24)).exists()
 
 
-def propor(ciclo, agora=None):
-    """Monta o e-mail e pede a confirmação no WhatsApp. Retorna a Confirmacao criada ou None."""
+SUBSTITUIDA = "substituída por nova prévia"
+
+
+def proximas_emissoes(ciclo, n=3):
+    """Linhas com as próximas emissões programadas do mesmo contrato."""
+    from apps.faturamento.models import CicloFaturamento
+
+    seguintes = CicloFaturamento.objects.filter(agenda=ciclo.agenda, competencia__gt=ciclo.competencia) \
+        .exclude(status="PULADO").order_by("competencia")[:n]
+    return [f"• {c.data_emissao:%d/%m/%Y} · competência {c.competencia:%m/%Y} · {brl(c.valor)}" for c in seguintes]
+
+
+def propor(ciclo, agora=None, substituir=False):
+    """Monta o e-mail e pede a confirmação no WhatsApp. Retorna a Confirmacao criada ou None.
+    `substituir`: cancela o pedido pendente da mesma nota (ex.: documento corrigido) e manda nova prévia."""
     from apps.faturamento.services.ciclos import variaveis
     from apps.mensageria.services import confirmacoes
     from apps.mensageria.services.fila import config_de, para_admins
@@ -204,6 +218,8 @@ def propor(ciclo, agora=None):
 
     agora = agora or timezone.now()
     agenda, nota = ciclo.agenda, ciclo.nota
+    if substituir and nota:
+        confirmacoes.cancelar_pendentes(nota.empresa, ACAO, nota.pk, SUBSTITUIDA)
     if not (agenda.enviar_email and nota and nota.status == NotaFiscal.Status.AUTORIZADA and nota.ambiente == 1
             and nota.contrato_id) or nota.entregas.exists() or _ja_proposto(nota, agora):
         return None
@@ -240,10 +256,12 @@ def propor(ciclo, agora=None):
     aprovar = [nomes_rascunho[k] for k in estado["rascunhos"]]
     corpo = mensagem if len(mensagem) <= 2500 else mensagem[:2500] + "… (texto completo na tela da nota)"
     linhas_anexos = "\n".join(f"• {a.nome}" for a in anexos)
+    proximas = proximas_emissoes(ciclo)
     texto = (f"📧 *Confirme o envio dos documentos*\n{nota.contrato.numero} · {nota.tomador} · competência "
              f"{nota.competencia:%m/%Y}\nNFS-e {nota.numero_nfse} · {brl(nota.valor_servicos)}\n\n"
              f"*Para:* {', '.join(destinos)}\n*Assunto:* {assunto}\n\n————\n{corpo}\n————\n\n"
              f"*Anexos ({len(anexos)} PDFs, abaixo):*\n{linhas_anexos}\n"
+             + ("\n*Próximas emissões deste contrato:*\n" + "\n".join(proximas) + "\n" if proximas else "")
              + (f"\n_PRÉVIA = rascunho; ao confirmar, {', '.join(aprovar)} são aprovados e assinados exatamente como "
                 "estão. O e-mail leva também o índice do pacote._\n" if aprovar else
                 "\n_O e-mail leva também o índice do pacote, assinado._\n")

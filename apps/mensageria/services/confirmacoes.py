@@ -148,3 +148,32 @@ def _envio_documentos(c, aceitar, por):
     from apps.fiscal.services import envio_documentos
 
     return envio_documentos.responder(c, aceitar, por)
+
+
+@acao("financeiro.receber")
+def _receber(c, aceitar, por):
+    from apps.financeiro.models import ContaBancaria
+    from apps.financeiro.services import indicadores, lancamentos
+    from apps.fiscal.models import ConfiguracaoFiscal
+
+    if not aceitar:
+        return "Ok, nenhuma baixa feita."
+    config = ConfiguracaoFiscal.objects.filter(empresa=c.empresa).select_related("conta_recebimento").first()
+    padrao = (config.conta_recebimento if config else None) \
+        or ContaBancaria.objects.filter(empresa=c.empresa, ativo=True).first()
+    hoje = timezone.localdate()
+    feitos, erros = [], []
+    for lanc in indicadores.abertos(c.empresa).filter(pk__in=c.dados.get("ids", [])):
+        try:
+            lancamentos.baixar(lanc, data_pagamento=hoje, forma_pagamento=c.dados.get("forma", "TED"),
+                               conta_bancaria=None if lanc.conta_bancaria_id else padrao)
+            feitos.append(lanc)
+        except ValidationError as erro:
+            erros.append(f"{lanc.descricao[:40]}: {'; '.join(erro.messages)}")
+    from apps.core.templatetags.ks import brl
+
+    total = sum((x.valor for x in feitos), 0)
+    texto = f"{len(feitos)} recebimento(s) baixado(s) em {hoje:%d/%m/%Y} · {brl(total)}." if feitos else "Nenhuma baixa feita."
+    if len(feitos) < len(c.dados.get("ids", [])) and not erros:
+        texto += " Algumas notas já tinham sido baixadas."
+    return texto + (" Pendentes: " + " | ".join(erros) if erros else "")
