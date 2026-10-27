@@ -375,3 +375,15 @@ def test_queda_vista_so_pelo_uptimerobot_avisa(empresa, chave_ur, sistema, whats
     textos = textos_admin()
     assert any("UptimeRobot: Nuvem Municipal fora do ar" in t for t in textos)
     assert any("UptimeRobot: Nuvem Municipal voltou" in t for t in textos)
+
+
+def test_sla_local_informa_periodo_realmente_medido(empresa, sistema):
+    from zoneinfo import ZoneInfo
+
+    tz = ZoneInfo("America/Bahia")
+    for dia in (9, 15, 27):
+        Verificacao.objects.create(empresa=empresa, sistema=sistema, sucesso=True, tempo_ms=100 * dia,
+                                   em=timezone.datetime(2026, 10, dia, 10, tzinfo=tz))
+    linha = sla.apurar(sistema.contrato, date(2026, 10, 1))["sistemas"][0]
+    assert linha["periodo"] == "09/10/2026 a 27/10/2026" and linha["intervalo_min"] == 5
+    assert (linha["tempo_min_ms"], linha["pico_ms"]) == (900, 2700)

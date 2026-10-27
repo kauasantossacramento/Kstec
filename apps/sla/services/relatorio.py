@@ -82,7 +82,11 @@ def apurar(contrato, competencia, manuais=None, medir=None):
             continue
         v = s.verificacoes.filter(em__range=(inicio, fim), desconsiderada=False).aggregate(
             total=Count("pk"), ok=Count("pk", filter=Q(sucesso=True)), medio=Avg("tempo_ms", filter=Q(sucesso=True)),
-            pico=Max("tempo_ms"))
+            minimo=Min("tempo_ms", filter=Q(sucesso=True)), pico=Max("tempo_ms", filter=Q(sucesso=True)),
+            primeira=Min("em"), ultima=Max("em"))
+        # Período efetivamente medido: da 1ª à última verificação do mês (monitor iniciado no meio do mês, mês em curso).
+        apurado_ini = timezone.localtime(max(inicio, v["primeira"])) if v["primeira"] else inicio
+        apurado_fim = timezone.localtime(min(fim, v["ultima"])) if v["ultima"] else fim
         incidentes = []
         indisponivel = timedelta()
         for inc in Incidente.objects.filter(sistema=s, inicio__lte=fim).exclude(status=Incidente.Status.DESCARTADO) \
@@ -95,7 +99,8 @@ def apurar(contrato, competencia, manuais=None, medir=None):
                                "minutos": minutos((inc.fim or timezone.now()) - inc.inicio), "causa": inc.causa})
         uptime = round(100 * v["ok"] / v["total"], 3) if v["total"] else None
         sistemas.append({"nome": s.nome, "url": s.url, "meta": str(s.meta_sla), "origem": "automatica",
-                         "periodo": f"{inicio:%d/%m/%Y} a {fim:%d/%m/%Y}", "fonte": "Monitoramento KS CENTRAL",
+                         "periodo": f"{apurado_ini:%d/%m/%Y} a {apurado_fim:%d/%m/%Y}", "fonte": "Monitoramento KS CENTRAL",
+                         "intervalo_min": s.intervalo_min, "tempo_min_ms": v["minimo"],
                          "incidentes_qtd": len(incidentes), "indisponivel_txt": duracao(indisponivel.total_seconds()),
                          "verificacoes": v["total"],
                          "falhas": v["total"] - v["ok"], "uptime": uptime,
