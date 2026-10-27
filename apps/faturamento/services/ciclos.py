@@ -79,20 +79,26 @@ AJUDA_PLACEHOLDERS = ("Use apenas: {competencia}, {mes_extenso}, {mes_nome}, {me
                       "{parcela2}, {total_parcelas}, {valor}, {contrato}, {empenho}, {objeto}.")
 
 
+def variaveis(ciclo):
+    """Campos automáticos da discriminação e do e-mail de envio dos documentos."""
+    from apps.core.templatetags.ks import brl
+
+    agenda, contrato = ciclo.agenda, ciclo.agenda.contrato
+    parcela, total = calendario.parcela(contrato, ciclo.competencia)
+    nome_mes = calendario.MESES[ciclo.competencia.month - 1]
+    return {"competencia": f"{ciclo.competencia:%m/%Y}", "mes_extenso": calendario.mes_extenso(ciclo.competencia),
+            "mes_nome": nome_mes.capitalize(), "mes_nome_min": nome_mes, "ano": ciclo.competencia.year,
+            "parcela": parcela, "parcela2": f"{parcela:02d}", "total_parcelas": total, "valor": brl(ciclo.valor),
+            "contrato": contrato.numero, "objeto": contrato.objeto,
+            "empenho": agenda.empenho.numero if agenda.empenho_id else ""}
+
+
 def discriminacao(ciclo):
     agenda, contrato = ciclo.agenda, ciclo.agenda.contrato
     modelo = ciclo.discriminacao or agenda.discriminacao or contrato.discriminacao_padrao \
         or "{objeto} — Competência {competencia}. Contrato nº {contrato}."
-    parcela, total = calendario.parcela(contrato, ciclo.competencia)
-    nome_mes = calendario.MESES[ciclo.competencia.month - 1]
-    from apps.core.templatetags.ks import brl
-
     try:
-        return modelo.format(competencia=f"{ciclo.competencia:%m/%Y}", mes_extenso=calendario.mes_extenso(ciclo.competencia),
-                             mes_nome=nome_mes.capitalize(), mes_nome_min=nome_mes, ano=ciclo.competencia.year,
-                             parcela=parcela, parcela2=f"{parcela:02d}", total_parcelas=total, valor=brl(ciclo.valor),
-                             contrato=contrato.numero, objeto=contrato.objeto,
-                             empenho=agenda.empenho.numero if agenda.empenho_id else "").strip()[:2000]
+        return modelo.format(**variaveis(ciclo)).strip()[:2000]
     except (KeyError, IndexError, ValueError) as erro:
         raise ValidationError(f"Modelo de discriminação inválido: {erro}. " + AJUDA_PLACEHOLDERS)
 
@@ -331,6 +337,15 @@ def pos_autorizacao(ciclo):
             passos.append(f"envio WhatsApp {lote.get_status_display().lower()}" if lote else "sem contato WhatsApp autorizado")
         except Exception as erro:  # noqa: BLE001
             passos.append(f"WhatsApp pendente: {erro}")
+    if ciclo.agenda.enviar_email:
+        try:
+            from apps.fiscal.services import envio_documentos
+
+            proposta = envio_documentos.propor(ciclo)
+            passos.append("e-mail dos documentos enviado ao WhatsApp para confirmação" if proposta
+                          else "e-mail dos documentos aguardando pendências")
+        except Exception as erro:  # noqa: BLE001
+            passos.append(f"e-mail dos documentos pendente: {erro}")
     with transaction.atomic():
         atual = CicloFaturamento.objects.select_for_update().get(pk=ciclo.pk)
         atual.registrar("pos_autorizacao", "; ".join(passos))

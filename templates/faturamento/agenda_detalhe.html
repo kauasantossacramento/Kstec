@@ -59,6 +59,7 @@
         <div><dt>Competências</dt><dd>{{ obj.inicio|date:"m/Y" }} → {{ obj.fim_efetivo|date:"m/Y" }}{% if not obj.fim %} <span class="muted small">(vigência)</span>{% endif %}</dd></div>
         <div><dt>Ativa desde</dt><dd>{{ obj.ativa_desde|data_br }}</dd></div>
         <div><dt>Envio ao cliente</dt><dd>{% if obj.enviar_whatsapp %}WhatsApp{% else %}—{% endif %}{% if obj.gerar_cobranca %} · cobrança Asaas{% endif %}</dd></div>
+        <div><dt>E-mail dos documentos</dt><dd>{% if obj.enviar_email %}{{ obj.emails_envio }}<br><span class="small muted">com sua confirmação no WhatsApp (SIM + código)</span>{% else %}—{% endif %}</dd></div>
         {% if obj.observacoes %}<div><dt>Observações</dt><dd>{{ obj.observacoes|linebreaksbr }}</dd></div>{% endif %}
       </dl>
     </section>

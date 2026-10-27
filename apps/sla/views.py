@@ -1,5 +1,6 @@
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.core.exceptions import ValidationError
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.views.decorators.http import require_POST
@@ -17,7 +18,7 @@ sistemas = Crud(Sistema, "sistema", "sla", [
     Coluna("Sistema", "nome", link=True), Coluna("Endereço", "url"), Coluna("Contrato", "contrato"),
     Coluna("Situação", "status", "status", "Sistema")], caminho="sistemas",
     fields=["nome", "url", "contrato", "metodo", "status_esperado", "palavra_chave", "intervalo_min", "timeout_s",
-            "lento_ms", "falhas_para_alerta", "meta_sla", "alertar_whatsapp", "alertar_email", "emails_alerta",
+            "lento_ms", "falhas_para_alerta", "meta_sla", "uptimerobot_id", "alertar_whatsapp", "alertar_email", "emails_alerta",
             "incluir_gerais", "em_manutencao", "ativo"],
     papeis_escrita=PAPEIS, busca=["nome", "url"], filtros=["status"], select_related=["contrato"],
     titulo="Sistema monitorado", titulo_plural="Sistemas monitorados", template_detalhe="sla/sistema_detalhe.html",
@@ -35,6 +36,7 @@ class DetalheSistema(DetalheGenerico):
         ctx.update({"barras": monitor.uptime_diario(s, 60), "incidentes": s.incidentes.all()[:15],
                     "verificacoes": s.verificacoes.all()[:20], "uptime30": pct(s.uptime(30)),
                     "uptime7": pct(s.uptime(7)), "medio": f"{medio} ms" if medio else "—",
+                    "pode_escrever": pode_escrever(self.request.user, PAPEIS),
                     "ssl": f"{timezone.localtime(s.ssl_expira_em):%d/%m/%Y}" if s.ssl_expira_em else "—"})
         return ctx
 
@@ -120,3 +122,70 @@ def alertas_previa(request):
     except (ValueError, IndexError) as erro:
         previas = {"erro": str(erro)}
     return render(request, "sla/_previa_alertas.html", {"previas": previas})
+
+
+@login_required
+@require_POST
+def incidente_descartar(request, pk):
+    exigir_escrita(request.user, PAPEIS)
+    inc = get_object_or_404(Incidente, pk=pk, empresa=request.empresa)
+    try:
+        monitor.descartar_incidente(inc, request.POST.get("motivo", ""), request.user)
+        messages.success(request, "Incidente marcado como falso positivo: saiu do uptime e do relatório de SLA.")
+    except ValidationError as erro:
+        messages.error(request, "; ".join(erro.messages))
+    return redirect("sla:sistema_detalhe", pk=inc.sistema_id)
+
+
+@login_required
+def uptimerobot(request):
+    """Chave de API (somente leitura) do UptimeRobot e vínculo dos monitores com os sistemas."""
+    from apps.core.models import Segredo
+
+    from .services import alertas_email
+    from .services import uptimerobot as ur
+
+    config = alertas_email.configuracao(request.empresa)
+    if request.method == "POST":
+        exigir_escrita(request.user, PAPEIS)
+        acao = request.POST.get("acao")
+        if acao == "salvar":
+            valor = request.POST.get("chave", "").strip()
+            if not valor or len(valor) > 100 or any(c.isspace() for c in valor):
+                messages.error(request, "Cole a chave de API somente leitura (Read-Only API Key) do UptimeRobot.")
+                return redirect("sla:uptimerobot")
+            try:
+                ur.consultar(valor)
+            except ur.ErroUptimeRobot as erro:
+                messages.error(request, f"O UptimeRobot recusou a chave: {erro}")
+                return redirect("sla:uptimerobot")
+            if config.uptimerobot_chave_id:
+                segredo = config.uptimerobot_chave
+                segredo.definir(valor)
+                segredo.save()
+            else:
+                config.uptimerobot_chave = Segredo.criar("UptimeRobot (somente leitura)", valor, empresa=request.empresa)
+                config.save()
+            total = ur.sincronizar(request.empresa)
+            messages.success(request, f"Chave salva. {total} sistema(s) vinculado(s) ao UptimeRobot.")
+        elif acao == "sincronizar":
+            total = ur.sincronizar(request.empresa)
+            messages.success(request, f"{total} sistema(s) atualizado(s) pelo UptimeRobot.")
+        elif acao == "remover" and config.uptimerobot_chave_id:
+            segredo = config.uptimerobot_chave
+            config.uptimerobot_chave = None
+            config.save()
+            segredo.delete()
+            Sistema.objects.filter(empresa=request.empresa).update(ur_atualizado_em=None)
+            messages.success(request, "Chave removida. O uptime volta a usar só o monitor do KS CENTRAL.")
+        return redirect("sla:uptimerobot")
+    lista, erro = [], ""
+    if config.uptimerobot_chave_id:
+        try:
+            lista = ur.monitores(request.empresa)
+        except ur.ErroUptimeRobot as e:
+            erro = str(e)
+    return render(request, "sla/uptimerobot.html", {
+        "config": config, "monitores": lista, "erro": erro or config.uptimerobot_erro,
+        "sem_vinculo": Sistema.objects.filter(empresa=request.empresa, ativo=True, uptimerobot_id=""),
+        "pode_escrever": pode_escrever(request.user, PAPEIS)})

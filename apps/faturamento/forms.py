@@ -8,6 +8,9 @@ from apps.core.forms import FormKS
 from .models import AgendaFaturamento, AjustePrevisao, CicloFaturamento
 
 RADIOS = ("referencia", "tipo_vencimento", "modo")
+CAMPOS_EXEMPLO = dict.fromkeys(("competencia", "mes_extenso", "mes_nome", "mes_nome_min", "ano", "parcela", "parcela2",
+                                "total_parcelas", "valor", "contrato", "empenho", "objeto", "nota", "anexos", "empresa",
+                                "cnpj"), "x")
 
 
 class AgendaForm(FormKS):
@@ -23,7 +26,8 @@ class AgendaForm(FormKS):
          ["referencia", "dia_emissao", "hora_emissao", "dia_util", "tipo_vencimento", "prazo_dias",
           "dia_vencimento", "inicio", "fim"]),
         ("Automação", "zap", "Quanto do processo o sistema faz sozinho. Você pode mudar a qualquer momento.",
-         ["modo", "aceite_automatico", "enviar_whatsapp", "gerar_cobranca", "observacoes"]),
+         ["modo", "aceite_automatico", "enviar_whatsapp", "gerar_cobranca", "enviar_email", "emails_envio",
+          "assunto_envio", "mensagem_envio", "observacoes"]),
     ]
     DESCRICOES = {
         "referencia": {"MES_ANTERIOR": "Em novembro emite a competência de outubro. Padrão para serviços mensais.",
@@ -35,18 +39,21 @@ class AgendaForm(FormKS):
                  "AUTOMATICO": "Transmite no horário se todas as validações passarem. Bloqueios são avisados."},
     }
     CONDICIONAIS = {"prazo_dias": "tipo_vencimento=PRAZO", "dia_vencimento": "tipo_vencimento=DIA_FIXO",
-                    "aceite_automatico": "modo=AUTOMATICO"}
+                    "aceite_automatico": "modo=AUTOMATICO", "emails_envio": "enviar_email=on",
+                    "assunto_envio": "enviar_email=on", "mensagem_envio": "enviar_email=on"}
     LARGOS = {"contrato", "discriminacao", "observacoes", "aceite_automatico", "enviar_whatsapp", "gerar_cobranca",
-              "dia_util"}
+              "dia_util", "enviar_email", "emails_envio", "assunto_envio", "mensagem_envio"}
 
     class Meta:
         model = AgendaFaturamento
         fields = ["contrato", "item_catalogo", "perfil", "empenho", "valor", "discriminacao", "referencia",
                   "dia_emissao", "hora_emissao", "dia_util", "tipo_vencimento", "prazo_dias", "dia_vencimento",
-                  "inicio", "fim", "modo", "enviar_whatsapp", "gerar_cobranca", "observacoes"]
+                  "inicio", "fim", "modo", "enviar_whatsapp", "gerar_cobranca", "enviar_email", "emails_envio",
+                  "assunto_envio", "mensagem_envio", "observacoes"]
         widgets = {"referencia": forms.RadioSelect, "tipo_vencimento": forms.RadioSelect, "modo": forms.RadioSelect,
                    "hora_emissao": forms.TimeInput(attrs={"type": "time"}, format="%H:%M"),
-                   "discriminacao": forms.Textarea(attrs={"rows": 4}), "observacoes": forms.Textarea(attrs={"rows": 2})}
+                   "discriminacao": forms.Textarea(attrs={"rows": 4}), "observacoes": forms.Textarea(attrs={"rows": 2}),
+                   "mensagem_envio": forms.Textarea(attrs={"rows": 8})}
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -77,7 +84,7 @@ class AgendaForm(FormKS):
         saida = []
         for i, (titulo, icone, descricao, campos) in enumerate(self.PASSOS, 1):
             itens = [{"bf": self[c], "opcoes": self.opcoes(c) if c in RADIOS else None, "largo": c in self.LARGOS,
-                      "mostrar_se": self.CONDICIONAIS.get(c, ""), "placeholders": c == "discriminacao"}
+                      "mostrar_se": self.CONDICIONAIS.get(c, ""), "placeholders": c in ("discriminacao", "mensagem_envio")}
                      for c in campos]
             saida.append({"numero": i, "titulo": titulo, "icone": icone, "descricao": descricao, "campos": itens,
                           "erros": any(self[c].errors for c in campos)})
@@ -103,6 +110,20 @@ class AgendaForm(FormKS):
             self.add_error("dia_vencimento", "Informe o dia do vencimento.")
         if d.get("modo") == AgendaFaturamento.Modo.AUTOMATICO and not d.get("aceite_automatico"):
             self.add_error("aceite_automatico", "Confirme que entende a transmissão automática.")
+        if d.get("enviar_email"):
+            from apps.fiscal.services.entregas import emails
+
+            try:
+                d["emails_envio"] = "; ".join(emails(d.get("emails_envio") or ""))
+            except ValidationError as erro:
+                self.add_error("emails_envio", erro)
+            if not (d.get("mensagem_envio") or "").strip():
+                self.add_error("mensagem_envio", "Informe o texto do e-mail.")
+            for campo in ("assunto_envio", "mensagem_envio"):
+                try:
+                    (d.get(campo) or "").format(**CAMPOS_EXEMPLO)
+                except (KeyError, IndexError, ValueError) as erro:
+                    self.add_error(campo, f"Campo automático inválido: {erro}. Use: {', '.join('{' + c + '}' for c in CAMPOS_EXEMPLO)}.")
         item = d.get("item_catalogo")
         if isinstance(item, ItemCatalogo) and item.pendencias_fiscais:
             self.add_error("item_catalogo", item.pendencias_fiscais)

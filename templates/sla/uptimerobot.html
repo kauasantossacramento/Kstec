@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block titulo %}UptimeRobot{% endblock %}
+{% block breadcrumb %}{% icone "chevron-right" 14 %}<a href="{% url 'sla:home' %}">Monitoramento</a>{% icone "chevron-right" 14 %}<span class="atual">UptimeRobot</span>{% endblock %}
+{% block h1 %}UptimeRobot{% endblock %}
+{% block subtitulo %}<p class="sub">Referência externa de disponibilidade: uptime das telas, barras diárias, relatório de SLA e confirmação de quedas antes de alertar.</p>{% endblock %}
+{% block acoes %}{% if config.uptimerobot_chave_id and pode_escrever %}<form method="post">{% csrf_token %}<button class="btn" name="acao" value="sincronizar">{% icone "refresh" 16 %} Sincronizar agora</button></form>{% endif %}{% endblock %}
+{% block conteudo %}
+{% if erro %}<div class="alerta danger">{% icone "alert" 18 %}<div>{{ erro }}</div></div>{% endif %}
+<div class="grid g-2-1">
+  <section class="card stack">
+    <h3>Monitores da conta</h3>
+    {% if not config.uptimerobot_chave_id %}
+      <p class="muted small" style="margin:0">Informe a chave ao lado para listar os monitores.</p>
+    {% else %}
+    <div class="tabela-wrap responsiva"><table class="tabela">
+      <thead><tr><th>Monitor</th><th>Situação</th><th class="num">Uptime 30d</th><th>Sistema no KS CENTRAL</th></tr></thead>
+      <tbody>{% for m in monitores %}<tr>
+        <td data-rotulo="Monitor"><strong>{{ m.friendly_name }}</strong><br><span class="xs muted">{{ m.url }}</span></td>
+        <td data-rotulo="Situação">{% if m.status == 2 %}{% status_badge "success" rotulo=m.status_txt %}{% elif m.status == 8 or m.status == 9 %}{% status_badge "danger" rotulo=m.status_txt %}{% else %}{% status_badge "neutral" rotulo=m.status_txt %}{% endif %}</td>
+        <td data-rotulo="Uptime 30d" class="num mono">{% if m.uptime30 is not None %}{{ m.uptime30|floatformat:3 }}%{% else %}—{% endif %}</td>
+        <td data-rotulo="Sistema">{% if m.sistema %}<a href="{% url 'sla:sistema_detalhe' m.sistema.pk %}">{{ m.sistema.nome }}</a>{% else %}<span class="muted small">sem vínculo (endereço diferente)</span>{% endif %}</td>
+      </tr>{% empty %}<tr><td colspan="4" class="muted small">Nenhum monitor retornado.</td></tr>{% endfor %}</tbody>
+    </table></div>
+    {% if sem_vinculo %}<p class="small muted" style="margin:0">Sem monitor no UptimeRobot (usam o monitor do KS CENTRAL): {% for s in sem_vinculo %}{{ s.nome }}{% if not forloop.last %}, {% endif %}{% endfor %}. O vínculo é automático pelo endereço; se for diferente, informe o ID do monitor no cadastro do sistema.</p>{% endif %}
+    {% endif %}
+  </section>
+  <aside class="stack">
+    {% if pode_escrever %}
+    <form method="post" class="card stack" autocomplete="off">{% csrf_token %}
+      <h3>{% if config.uptimerobot_chave_id %}Trocar chave{% else %}Conectar{% endif %}</h3>
+      <p class="small muted" style="margin:0">No UptimeRobot: <strong>Integrations &amp; API → API → Read-Only API Key</strong>. Use a chave <em>somente leitura</em>: o KS CENTRAL só consulta, nunca altera monitores. Ela fica criptografada.</p>
+      <div class="campo"><label for="id_chave">Chave de API (somente leitura)</label><input type="password" id="id_chave" name="chave" required maxlength="100" placeholder="ur…"></div>
+      <div class="form-acoes"><button class="btn btn-primario" name="acao" value="salvar">{% icone "check" 16 %} Testar e salvar</button>
+      {% if config.uptimerobot_chave_id %}<button class="btn btn-fantasma" name="acao" value="remover" formnovalidate>Remover</button>{% endif %}</div>
+    </form>
+    {% endif %}
+    <section class="card">
+      <h3>Como é usado</h3>
+      <ul class="small" style="margin:0;padding-left:18px">
+        <li>Uptime 7/30 dias e barras diárias vêm do UptimeRobot (sincronizado a cada 5 min).</li>
+        <li>Quando o monitor do KS CENTRAL falha, o sistema consulta o UptimeRobot antes de alertar: se ele mostra o sistema no ar, não há alerta nem incidente.</li>
+        <li>O relatório de SLA apura disponibilidade e quedas do período pela API; a medição manual, quando informada, prevalece.</li>
+      </ul>
+    </section>
+  </aside>
+</div>
+{% endblock %}

@@ -17,15 +17,20 @@
   {% kpi_card "Certificado SSL até" ssl formato="txt" icone_nome="lock" %}
 </div>
 <section class="card" style="margin-bottom:16px">
-  <div class="card-cab"><h3>Disponibilidade · 60 dias</h3><span class="small muted">verificado a cada {{ obj.intervalo_min }} min</span></div>
+  <div class="card-cab"><h3>Disponibilidade · {% if obj.usa_uptimerobot %}30{% else %}60{% endif %} dias</h3><span class="small muted">fonte: {{ obj.fonte_uptime }}{% if obj.usa_uptimerobot %} · sincronizado {{ obj.ur_atualizado_em|date:"H:i" }}{% else %} · verificado a cada {{ obj.intervalo_min }} min{% endif %}</span></div>
   {% uptime_bar barras %}
 </section>
 <div class="grid g-2">
   <section class="card">
     <h3>Incidentes</h3>
     {% for i in incidentes %}
-    <div class="item-prev"><span class="ponto {% if i.status == 'ABERTO' %}danger{% else %}success{% endif %}"></span>
-      <div><strong>{{ i.inicio|date:"d/m/Y H:i" }}</strong><div class="small muted">{{ i.causa|default:"—" }}</div></div>
+    <div class="item-prev"><span class="ponto {% if i.status == 'ABERTO' %}danger{% elif i.status == 'DESCARTADO' %}neutral{% else %}success{% endif %}"></span>
+      <div style="min-width:0"><strong>{{ i.inicio|date:"d/m/Y H:i" }}</strong>{% if i.status == "DESCARTADO" %} {% status_badge "neutral" rotulo="falso positivo" %}{% endif %}<div class="small muted">{{ i.causa|default:"—" }}</div>
+        {% if i.status == "DESCARTADO" %}<div class="xs muted">{{ i.observacao|linebreaksbr }}</div>
+        {% elif pode_escrever %}<details class="xs"><summary style="cursor:pointer">Foi falha do monitor?</summary>
+          <form method="post" action="{% url 'sla:incidente_descartar' i.pk %}" class="stack" style="margin-top:6px">{% csrf_token %}
+            <input name="motivo" required minlength="5" maxlength="200" placeholder="Ex.: UptimeRobot sem incidentes no período">
+            <button class="btn btn-fantasma" type="submit">Marcar como falso positivo</button></form></details>{% endif %}</div>
       <span class="small mono">{% if i.status == "ABERTO" %}em andamento{% else %}{{ i.duracao|duracao_curta }}{% endif %}</span></div>
     {% empty %}<p class="muted small">Nenhum incidente.</p>{% endfor %}
   </section>

@@ -141,3 +141,10 @@ def _lote_expirado(c):
         # AGUARDAR: renova o pedido pelo mesmo prazo, sem novo aviso.
         Confirmacao.objects.filter(pk=c.pk).update(status=Confirmacao.Status.PENDENTE,
                                                    expira_em=timezone.now() + timedelta(hours=24))
+
+
+@acao("fiscal.envio_documentos")
+def _envio_documentos(c, aceitar, por):
+    from apps.fiscal.services import envio_documentos
+
+    return envio_documentos.responder(c, aceitar, por)

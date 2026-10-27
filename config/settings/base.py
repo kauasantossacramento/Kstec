@@ -166,6 +166,7 @@ CELERY_BEAT_SCHEDULER = "django_celery_beat.schedulers:DatabaseScheduler"
 # até existirem; ver docs/PASSAGEM_AGENTE_IA.md.
 CELERY_BEAT_SCHEDULE = {
     "sla.despachar_verificacoes": {"task": "apps.sla.tasks.despachar_verificacoes", "schedule": 60.0},
+    "sla.sincronizar_uptimerobot": {"task": "apps.sla.tasks.sincronizar_uptimerobot", "schedule": crontab(minute="*/5")},
     "sla.limpar_brutos": {"task": "apps.sla.tasks.limpar_brutos", "schedule": crontab(hour=3, minute=0)},
     "sla.verificar_ssl_todos": {"task": "apps.sla.tasks.verificar_ssl_todos", "schedule": crontab(hour=6, minute=0)},
     "certidoes.alertar_vencimentos": {
@@ -196,6 +197,10 @@ CELERY_BEAT_SCHEDULE = {
     "fiscal.sincronizar_respostas": {
         "task": "apps.fiscal.tasks.sincronizar_respostas",
         "schedule": crontab(minute="*/15"),
+    },
+    "fiscal.propor_envios_documentos": {
+        "task": "apps.fiscal.tasks.propor_envios_documentos",
+        "schedule": crontab(minute="5,35"),
     },
     "faturamento.acompanhar_transmissoes": {
         "task": "apps.faturamento.tasks.acompanhar_transmissoes",

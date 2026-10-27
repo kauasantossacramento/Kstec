@@ -15,7 +15,7 @@
   <thead><tr><th>Sistema</th><th>Fonte · período</th><th class="num">Incidentes</th><th class="num">Disponibilidade</th><th>Meta</th><th class="num">Resposta média</th><th class="num">Indisponível</th></tr></thead>
   <tbody>{% for s in dados.sistemas %}<tr>
     <td data-rotulo="Sistema"><strong>{{ s.nome }}</strong><br><span class="xs muted">{{ s.url }}</span></td>
-    <td data-rotulo="Fonte" class="small">{{ s.fonte|default:"Monitoramento KS CENTRAL" }}{% if s.origem == "manual" %} {% status_badge "info" rotulo="manual" %}{% endif %}<br><span class="muted">{{ s.periodo }}</span></td>
+    <td data-rotulo="Fonte" class="small">{{ s.fonte|default:"Monitoramento KS CENTRAL" }}{% if s.origem == "manual" %} {% status_badge "info" rotulo="manual" %}{% elif s.origem == "uptimerobot" %} {% status_badge "success" rotulo="automático" %}{% endif %}<br><span class="muted">{{ s.periodo }}</span></td>
     <td data-rotulo="Incidentes" class="num mono">{% if s.incidentes_qtd is not None %}{{ s.incidentes_qtd }}{% else %}{{ s.incidentes|length }}{% endif %}</td>
     <td data-rotulo="Disponibilidade" class="num mono">{% if s.uptime is not None %}{{ s.uptime|floatformat:3 }}%{% else %}—{% endif %}</td>
     <td data-rotulo="Meta">{{ s.meta }}% {% if s.uptime is not None %}{% if s.atingiu %}{% status_badge "success" rotulo="atingida" %}{% else %}{% status_badge "danger" rotulo="não atingida" %}{% endif %}{% endif %}</td>
@@ -25,7 +25,7 @@
 {% if pode_aprovar %}
 <section class="stack" style="margin-top:16px">
   <h3>{% icone "edit" 16 %} Medição manual por sistema</h3>
-  <p class="small muted" style="margin:0">Use quando o sistema não tiver verificações do monitoramento interno no mês: copie do painel do monitor externo (UptimeRobot) a disponibilidade, os incidentes, o tempo fora do ar e os tempos de resposta, informando o período consultado. A fonte e o período aparecem no PDF.</p>
+  <p class="small muted" style="margin:0">Sistemas vinculados ao UptimeRobot são apurados automaticamente pela API. Use a medição manual só para corrigir ou complementar: ela prevalece sobre a automática. Copie do painel do monitor externo (UptimeRobot) a disponibilidade, os incidentes, o tempo fora do ar e os tempos de resposta, informando o período consultado. A fonte e o período aparecem no PDF.</p>
   {% for b in blocos %}
   <details class="card"{% if not b.manual and dados.sem_dados %} open{% endif %}>
     <summary style="cursor:pointer"><strong>{{ b.sistema.nome }}</strong> <span class="xs muted">{{ b.sistema.url }}</span> {% if b.manual %}{% status_badge "info" rotulo="medição manual registrada" %}{% endif %}</summary>

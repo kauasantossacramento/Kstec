@@ -22,7 +22,7 @@ MAPAS = {
                "CANCELADA": "neutral"},
     "RelatorioAtividades": {"RASCUNHO": "neutral", "EM_REVISAO": "warning", "APROVADO": "success",
                             "ENVIADO": "info"},
-    "Incidente": {"ABERTO": "danger", "FECHADO": "success"},
+    "Incidente": {"ABERTO": "danger", "FECHADO": "success", "DESCARTADO": "neutral"},
     "GuiaISS": {"A_DECLARAR": "warning", "DECLARADA": "info", "ENCERRADA": "info", "PAGA": "success"},
     "Venda": {"ABERTA": "info", "EM_PRODUCAO": "warning", "ENTREGUE": "success", "FATURADA": "success",
               "CANCELADA": "neutral"},

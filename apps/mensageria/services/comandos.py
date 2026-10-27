@@ -100,7 +100,8 @@ def responder_admin(empresa, texto, telefone="", pergunta_original=None):
     m = re.match(r"^(sim|s|nao|n|ok)\s+(\d{4})$", texto)
     if m:
         aceitar = m.group(1) in ("sim", "s", "ok")
-        c, resultado = confirmacoes.responder(empresa, m.group(2), aceitar, por="WhatsApp do administrador")
+        por = "WhatsApp do administrador" + (f" ({telefone})" if telefone else "")
+        c, resultado = confirmacoes.responder(empresa, m.group(2), aceitar, por=por)
         return [("✅ " if c and aceitar else "ℹ️ ") + resultado], []
     m = re.match(r"^nota\s+(\d+)$", texto)
     if m:

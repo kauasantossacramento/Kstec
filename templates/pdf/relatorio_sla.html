@@ -1,6 +1,6 @@
 {% extends "pdf/_base.html" %}{% block titulo_cab %}Relatório de nível de serviço (SLA){% endblock %}{% block sub_cab %}Competência {{ relatorio.competencia|date:"m/Y" }} · versão {{ relatorio.versao }}{% endblock %}
 {% block estilo %}table.sla { font-size: 8.5pt; table-layout: fixed; } table.sla th, table.sla td { padding: 4pt 4pt; word-wrap: break-word; } .ok-badge { color: #16A34A; font-weight: bold; } .nok-badge { color: #DC2626; font-weight: bold; } .fonte { font-size: 8pt; color: #5b6478; }{% endblock %}
-{% block conteudo %}
+{% block conteudo %}{% if previa %}<div style="border:2px dashed #B45309;color:#B45309;text-align:center;font-weight:bold;padding:6pt;margin-bottom:10pt">PRÉVIA — DOCUMENTO AINDA NÃO APROVADO</div>{% endif %}
 <h1>Níveis de serviço do período</h1>
 <div class="caixa"><strong>Contrato:</strong> {{ relatorio.contrato.numero }}<br><strong>Cliente:</strong> {{ relatorio.contrato.cliente }}<br><strong>Competência:</strong> {{ relatorio.competencia|date:"m/Y" }}<br><strong>Objeto:</strong> {{ relatorio.contrato.objeto|truncatechars:400 }}<br><strong>Disponibilidade média:</strong> {% if dados.uptime_geral is not None %}{{ dados.uptime_geral|floatformat:3 }}%{% else %}sem medições no período{% endif %}</div>
 <h2>Disponibilidade por sistema</h2>
@@ -24,7 +24,7 @@
 </table>
 {% for s in dados.sistemas %}{% if s.incidentes %}<p><strong>Incidentes — {{ s.nome }}</strong></p><ul>{% for i in s.incidentes %}<li>{{ i.inicio }} → {{ i.fim }} ({{ i.minutos }} min){% if i.causa %} · {{ i.causa }}{% endif %}</li>{% endfor %}</ul>{% endif %}{% endfor %}
 <h2>Fonte e metodologia</h2>
-{% for s in dados.sistemas %}<p class="fonte"><strong>{{ s.nome }}:</strong> {% if s.origem == "manual" %}medição do monitor externo {{ s.fonte }} (verificação HTTP/S{% if s.intervalo_min %} a cada {{ s.intervalo_min }} min{% endif %}), período {{ s.periodo }}{% if s.referencia %} — {{ s.referencia }}{% endif %}.{% else %}monitoramento automático do KS CENTRAL, verificações HTTP a intervalos regulares no mês da competência.{% endif %}</p>{% endfor %}
+{% for s in dados.sistemas %}<p class="fonte"><strong>{{ s.nome }}:</strong> {% if s.origem == "manual" or s.origem == "uptimerobot" %}medição do monitor externo {{ s.fonte }} (verificação HTTP/S{% if s.origem == "uptimerobot" %} a partir de múltiplas localidades{% endif %}{% if s.intervalo_min %} a cada {{ s.intervalo_min }} min{% endif %}), período {{ s.periodo }}{% if s.referencia %} — {{ s.referencia }}{% endif %}{% if s.origem == "uptimerobot" and s.tempo_medio_ms %}; tempos de resposta medidos pelo monitoramento do KS CENTRAL{% endif %}.{% else %}monitoramento automático do KS CENTRAL, verificações HTTP a intervalos regulares no mês da competência.{% endif %}</p>{% endfor %}
 <p class="fonte">Disponibilidade = tempo em operação ÷ tempo total do período apurado. Incidente = indisponibilidade confirmada por verificações consecutivas com falha, encerrada na primeira verificação bem-sucedida.{% if dados.omitidos %} Sistemas sem medição no período não constam do quadro: {{ dados.omitidos|join:", " }}.{% endif %}</p>
 {% if relatorio.observacoes %}<h2>Observações</h2>{{ relatorio.observacoes|linebreaks }}{% endif %}
 {% with data_documento=relatorio.aprovado_em %}{% include "pdf/_assinatura.html" %}{% endwith %}

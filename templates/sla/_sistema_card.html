@@ -7,7 +7,7 @@
     {% badge_obj s %}
   </div>
   <div class="metricas">
-    <div><strong>{% if s.uptime_30d is not None %}{{ s.uptime_30d|floatformat:2 }}%{% else %}—{% endif %}</strong><span>uptime 30d</span></div>
+    <div><strong>{% if s.uptime_30d is not None %}{{ s.uptime_30d|floatformat:2 }}%{% else %}—{% endif %}</strong><span title="fonte: {{ s.fonte_uptime }}">uptime 30d{% if s.usa_uptimerobot %} · UR{% endif %}</span></div>
     <div><strong>{{ s.ultimo_tempo_ms|default:"—" }}{% if s.ultimo_tempo_ms %}<small class="muted"> ms</small>{% endif %}</strong><span>resposta</span></div>
     <div><strong>{% if s.ultima_verificacao %}{{ s.ultima_verificacao|date:"H:i" }}{% else %}—{% endif %}</strong><span>verificado</span></div>
   </div>

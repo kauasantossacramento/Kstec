@@ -36,13 +36,33 @@ def checar(sistema, transporte=None):
     return True, resposta.status_code, tempo, ""
 
 
-def verificar(sistema, transporte=None, agora=None):
+def confirmar_externo(sistema):
+    from .uptimerobot import status_atual
+
+    return status_atual(sistema)
+
+
+def verificar(sistema, transporte=None, agora=None, externo=None):
+    """`externo`: função que devolve o status do UptimeRobot (padrão: consulta a API) usada para confirmar a queda."""
     agora = agora or timezone.now()
     sucesso, http, tempo, erro = checar(sistema, transporte)
+    no_ar_externo = False
+    if not sucesso and sistema.uptimerobot_id and sistema.status != S.FORA \
+            and sistema.falhas_consecutivas + 1 >= sistema.falhas_para_alerta:
+        from .uptimerobot import NO_AR
+
+        # Consulta externa fora da transação: só vira queda se o UptimeRobot também não alcançar o sistema.
+        no_ar_externo = (externo or confirmar_externo)(sistema) == NO_AR
+        if no_ar_externo:
+            erro = f"{erro} · UptimeRobot: no ar (falha só a partir do servidor de monitoramento)"
     with transaction.atomic():
         s = Sistema.objects.select_for_update().get(pk=sistema.pk)
         Verificacao.objects.create(empresa=s.empresa, sistema=s, em=agora, sucesso=sucesso, http_status=http,
-                                   tempo_ms=tempo, erro=erro[:300])
+                                   tempo_ms=tempo, erro=erro[:300], desconsiderada=no_ar_externo)
+        if no_ar_externo:
+            ultimo_ok = s.verificacoes.filter(sucesso=True).order_by("-em").values_list("em", flat=True).first()
+            s.verificacoes.filter(sucesso=False, desconsiderada=False, **({"em__gt": ultimo_ok} if ultimo_ok else {})) \
+                .update(desconsiderada=True)
         anterior = s.status
         s.ultima_verificacao, s.ultimo_tempo_ms, s.ultimo_erro = agora, tempo, erro[:300]
         if sucesso:
@@ -50,8 +70,8 @@ def verificar(sistema, transporte=None, agora=None):
             novo = S.DEGRADADO if tempo and tempo > s.lento_ms else S.OPERACIONAL
         else:
             s.falhas_consecutivas += 1
-            # Uma falha isolada não muda o estado: só alerta após N falhas seguidas.
-            novo = S.FORA if s.falhas_consecutivas >= s.falhas_para_alerta else anterior
+            # Uma falha isolada não muda o estado: só alerta após N falhas seguidas (e, com UptimeRobot, se ele confirmar).
+            novo = S.FORA if s.falhas_consecutivas >= s.falhas_para_alerta and not no_ar_externo else anterior
         if s.em_manutencao:
             novo = S.MANUTENCAO
         mudou = novo != anterior
@@ -149,11 +169,14 @@ def verificar_ssl_todos():
 
 
 def uptime_diario(sistema, dias=30):
-    """Lista {dia, pct} para o componente uptime_bar."""
+    """Lista {dia, pct} para o componente uptime_bar (UptimeRobot quando sincronizado; senão o monitor local)."""
     hoje = timezone.localdate()
     inicio = hoje - timedelta(days=dias - 1)
+    if sistema.usa_uptimerobot and sistema.ur_diario:
+        return [{"dia": d, "pct": sistema.ur_diario.get(d.isoformat())}
+                for d in (inicio + timedelta(days=i) for i in range(dias))]
     por_dia = {}
-    for v in sistema.verificacoes.filter(em__date__gte=inicio).only("em", "sucesso"):
+    for v in sistema.verificacoes.filter(em__date__gte=inicio, desconsiderada=False).only("em", "sucesso"):
         d = timezone.localtime(v.em).date()
         total, ok = por_dia.get(d, (0, 0))
         por_dia[d] = (total + 1, ok + (1 if v.sucesso else 0))
@@ -163,3 +186,27 @@ def uptime_diario(sistema, dias=30):
         total, ok = por_dia.get(d, (0, 0))
         saida.append({"dia": d, "pct": round(100 * ok / total, 2) if total else None})
     return saida
+
+
+def descartar_incidente(incidente, motivo, usuario=None):
+    """Falso positivo (falha do próprio monitor): o incidente e as falhas do período saem do uptime e do SLA."""
+    from django.core.exceptions import ValidationError
+
+    motivo = (motivo or "").strip()
+    if len(motivo) < 5:
+        raise ValidationError("Explique em poucas palavras por que é um falso positivo.")
+    with transaction.atomic():
+        inc = Incidente.objects.select_for_update().select_related("sistema").get(pk=incidente.pk)
+        if inc.status == Incidente.Status.DESCARTADO:
+            return inc
+        s = inc.sistema
+        margem = timedelta(minutes=s.intervalo_min * (s.falhas_para_alerta + 1))
+        s.verificacoes.filter(sucesso=False, em__gte=inc.inicio - margem, em__lte=inc.fim or timezone.now()) \
+            .update(desconsiderada=True)
+        inc.fim = inc.fim or timezone.now()
+        inc.status = Incidente.Status.DESCARTADO
+        quem = f" ({usuario})" if getattr(usuario, "pk", None) else ""
+        inc.observacao = (inc.observacao + "\n" if inc.observacao else "") + \
+            f"Falso positivo em {timezone.localtime():%d/%m/%Y %H:%M}{quem}: {motivo}"
+        inc.save()
+    return inc

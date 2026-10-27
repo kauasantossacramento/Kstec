@@ -6,7 +6,7 @@ from decimal import Decimal
 
 from django.core.exceptions import ValidationError
 from django.db import transaction
-from django.db.models import Avg, Count, Max, Q
+from django.db.models import Avg, Count, Max, Min, Q
 from django.utils import timezone
 
 from apps.core.models import Anexo
@@ -47,19 +47,46 @@ def medicao_manual(s, m):
             "fonte": m.get("fonte") or "UptimeRobot", "intervalo_min": m.get("intervalo_min"), "referencia": m.get("referencia", "")}
 
 
-def apurar(contrato, competencia, manuais=None):
-    """Medição automática do mês; sistemas sem verificações usam a medição manual informada (quando houver).
+def medicao_uptimerobot(s, inicio, fim, medir=None):
+    """Linha do relatório a partir do UptimeRobot (disponibilidade e quedas) + tempos de resposta do monitor local."""
+    from .uptimerobot import medir as medir_padrao
+
+    m = (medir or medir_padrao)(s, inicio, fim)
+    if m is None:
+        return None
+    tempos = s.verificacoes.filter(em__range=(m["inicio"], m["fim"]), sucesso=True).aggregate(
+        medio=Avg("tempo_ms"), minimo=Min("tempo_ms"), pico=Max("tempo_ms"))
+    ini, fi = timezone.localtime(m["inicio"]), timezone.localtime(m["fim"])
+    return {"nome": s.nome, "url": s.url, "meta": str(s.meta_sla), "origem": "uptimerobot", "verificacoes": None, "falhas": None,
+            "uptime": m["uptime"], "atingiu": Decimal(str(m["uptime"])) >= s.meta_sla,
+            "tempo_medio_ms": int(tempos["medio"]) if tempos["medio"] else None, "tempo_min_ms": tempos["minimo"],
+            "pico_ms": tempos["pico"], "indisponivel_min": round(m["indisponivel_seg"] / 60),
+            "indisponivel_txt": duracao(m["indisponivel_seg"]), "incidentes_qtd": len(m["incidentes"]),
+            "incidentes": m["incidentes"], "periodo": f"{ini:%d/%m/%Y} a {fi:%d/%m/%Y}", "fonte": "UptimeRobot",
+            "intervalo_min": m["intervalo_min"]}
+
+
+def apurar(contrato, competencia, manuais=None, medir=None):
+    """Por sistema, nesta ordem: medição manual informada; UptimeRobot (referência externa); monitor do KS CENTRAL.
     Sistemas sem nenhum dado são omitidos se outro sistema do contrato tiver medição."""
     manuais = manuais or {}
     inicio, fim = periodo(competencia)
     sistemas, omitidos = [], []
     for s in contrato.sistemas.filter(ativo=True).order_by("nome"):
-        v = s.verificacoes.filter(em__range=(inicio, fim)).aggregate(
+        if str(s.pk) in manuais:
+            sistemas.append(medicao_manual(s, manuais[str(s.pk)]))
+            continue
+        externa = medicao_uptimerobot(s, inicio, fim, medir) if s.uptimerobot_id else None
+        if externa:
+            sistemas.append(externa)
+            continue
+        v = s.verificacoes.filter(em__range=(inicio, fim), desconsiderada=False).aggregate(
             total=Count("pk"), ok=Count("pk", filter=Q(sucesso=True)), medio=Avg("tempo_ms", filter=Q(sucesso=True)),
             pico=Max("tempo_ms"))
         incidentes = []
         indisponivel = timedelta()
-        for inc in Incidente.objects.filter(sistema=s, inicio__lte=fim).filter(Q(fim__isnull=True) | Q(fim__gte=inicio)):
+        for inc in Incidente.objects.filter(sistema=s, inicio__lte=fim).exclude(status=Incidente.Status.DESCARTADO) \
+                .filter(Q(fim__isnull=True) | Q(fim__gte=inicio)):
             ini, fi = max(inc.inicio, inicio), min(inc.fim or timezone.now(), fim)
             if fi > ini:
                 indisponivel += fi - ini
@@ -67,9 +94,6 @@ def apurar(contrato, competencia, manuais=None):
                                "fim": timezone.localtime(inc.fim).strftime("%d/%m %H:%M") if inc.fim else "em andamento",
                                "minutos": minutos((inc.fim or timezone.now()) - inc.inicio), "causa": inc.causa})
         uptime = round(100 * v["ok"] / v["total"], 3) if v["total"] else None
-        if uptime is None and str(s.pk) in manuais:
-            sistemas.append(medicao_manual(s, manuais[str(s.pk)]))
-            continue
         sistemas.append({"nome": s.nome, "url": s.url, "meta": str(s.meta_sla), "origem": "automatica",
                          "periodo": f"{inicio:%d/%m/%Y} a {fim:%d/%m/%Y}", "fonte": "Monitoramento KS CENTRAL",
                          "incidentes_qtd": len(incidentes), "indisponivel_txt": duracao(indisponivel.total_seconds()),
@@ -85,7 +109,8 @@ def apurar(contrato, competencia, manuais=None):
     return {"competencia": competencia.isoformat(), "gerado_em": timezone.now().isoformat(timespec="seconds"),
             "sistemas": sistemas, "uptime_geral": round(sum(medidos) / len(medidos), 3) if medidos else None,
             "sem_dados": not medidos, "omitidos": omitidos, "manuais": manuais,
-            "tem_manual": any(x.get("origem") == "manual" for x in sistemas)}
+            "tem_manual": any(x.get("origem") == "manual" for x in sistemas),
+            "tem_uptimerobot": any(x.get("origem") == "uptimerobot" for x in sistemas)}
 
 
 @transaction.atomic

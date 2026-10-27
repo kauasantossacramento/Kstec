@@ -47,6 +47,13 @@ class Sistema(ModeloBase):
     falhas_consecutivas = models.PositiveSmallIntegerField(default=0, editable=False)
     ultima_mudanca = models.DateTimeField(null=True, blank=True, editable=False)
     ssl_expira_em = models.DateTimeField("certificado SSL expira em", null=True, blank=True, editable=False)
+    # UptimeRobot: referência externa (vários pontos de verificação) para disponibilidade, SLA e confirmação de quedas.
+    uptimerobot_id = models.CharField("monitor no UptimeRobot", max_length=20, blank=True,
+                                      help_text="ID do monitor. Vazio vincula automaticamente pelo endereço.")
+    ur_status = models.PositiveSmallIntegerField(null=True, blank=True, editable=False)
+    ur_uptimes = models.JSONField(default=dict, blank=True, editable=False)
+    ur_diario = models.JSONField(default=dict, blank=True, editable=False)
+    ur_atualizado_em = models.DateTimeField(null=True, blank=True, editable=False)
 
     class Meta:
         verbose_name = "sistema monitorado"
@@ -56,9 +63,21 @@ class Sistema(ModeloBase):
     def __str__(self):
         return self.nome
 
+    @property
+    def usa_uptimerobot(self):
+        """Medição do UptimeRobot sincronizada há menos de 1 hora."""
+        return bool(self.uptimerobot_id and self.ur_atualizado_em
+                    and timezone.now() - self.ur_atualizado_em < timedelta(hours=1))
+
+    @property
+    def fonte_uptime(self):
+        return "UptimeRobot" if self.usa_uptimerobot else "Monitor KS CENTRAL"
+
     def uptime(self, dias=30):
+        if self.usa_uptimerobot and str(dias) in self.ur_uptimes:
+            return self.ur_uptimes[str(dias)]
         desde = timezone.now() - timedelta(days=dias)
-        r = self.verificacoes.filter(em__gte=desde).aggregate(total=Count("pk"), ok=Count("pk", filter=Q(sucesso=True)))
+        r = self.verificacoes.filter(em__gte=desde, desconsiderada=False).aggregate(total=Count("pk"), ok=Count("pk", filter=Q(sucesso=True)))
         return round(100 * r["ok"] / r["total"], 2) if r["total"] else None
 
     @property
@@ -80,6 +99,7 @@ class Verificacao(ModeloSimples):
     http_status = models.PositiveSmallIntegerField(null=True, blank=True)
     tempo_ms = models.PositiveIntegerField(null=True, blank=True)
     erro = models.CharField(max_length=300, blank=True)
+    desconsiderada = models.BooleanField(default=False, help_text="Falha do próprio monitor (falso positivo).")
 
     class Meta:
         ordering = ["-em"]
@@ -90,11 +110,12 @@ class Incidente(ModeloBase):
     class Status(models.TextChoices):
         ABERTO = "ABERTO", "Em andamento"
         FECHADO = "FECHADO", "Resolvido"
+        DESCARTADO = "DESCARTADO", "Falso positivo"
 
     sistema = models.ForeignKey(Sistema, on_delete=models.CASCADE, related_name="incidentes")
     inicio = models.DateTimeField()
     fim = models.DateTimeField(null=True, blank=True)
-    status = models.CharField(max_length=8, choices=Status.choices, default=Status.ABERTO)
+    status = models.CharField(max_length=10, choices=Status.choices, default=Status.ABERTO)
     causa = models.CharField(max_length=300, blank=True)
     observacao = models.TextField("observação", blank=True)
 
@@ -127,6 +148,9 @@ class ConfiguracaoAlertas(ModeloBase):
     corpo_retorno = models.TextField("mensagem (retorno)", default=(
         "Olá,\n\nO sistema {sistema} voltou a operar normalmente. Período de indisponibilidade: {duracao} "
         "(início em {inicio}).\n\nKS TEC Soluções de Tecnologia"))
+    uptimerobot_chave = models.ForeignKey("core.Segredo", null=True, blank=True, on_delete=models.SET_NULL, editable=False,
+                                          related_name="+", help_text="Chave de API somente leitura do UptimeRobot.")
+    uptimerobot_erro = models.CharField(max_length=300, blank=True, editable=False)
 
     class Meta:
         verbose_name = "configuração de alertas"

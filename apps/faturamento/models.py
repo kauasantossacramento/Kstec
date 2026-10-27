@@ -53,6 +53,17 @@ class AgendaFaturamento(ModeloBase):
                                    help_text="Emissões anteriores a esta data não são criadas automaticamente.")
     enviar_whatsapp = models.BooleanField("enviar nota ao cliente por WhatsApp", default=False)
     gerar_cobranca = models.BooleanField("gerar cobrança Asaas (link e PIX)", default=False)
+    enviar_email = models.BooleanField(
+        "enviar documentos por e-mail após autorização", default=False,
+        help_text="Monta o e-mail com a nota, documentos e certidões e pede sua confirmação no WhatsApp antes de enviar.")
+    emails_envio = models.CharField("destinatários do e-mail", max_length=500, blank=True,
+                                    help_text="Separe por ponto e vírgula. Ex.: setor que atesta o contrato.")
+    assunto_envio = models.CharField("assunto do e-mail", max_length=200, blank=True,
+                                     default="NFS-e {nota} — Contrato nº {contrato} — Competência {competencia} — KS TEC")
+    mensagem_envio = models.TextField("texto do e-mail", max_length=5000, blank=True, default=(
+        "Prezados,\n\nEncaminhamos a Nota Fiscal de Serviço eletrônica nº {nota}, referente à competência "
+        "{mes_extenso} ({parcela}º mês de execução) do Contrato nº {contrato}, no valor de {valor}.\n\n"
+        "Seguem anexos: {anexos}.\n\nFicamos à disposição.\n\n{empresa}\nCNPJ {cnpj}"))
     observacoes = models.TextField("observações", blank=True)
 
     class Meta:

@@ -4,6 +4,7 @@
 {% block h1 %}Monitoramento{% endblock %}
 {% block subtitulo %}<p class="sub">{% if not sistemas %}Cadastre os sistemas que você entrega para acompanhar disponibilidade e receber alertas.{% elif fora %}<strong style="color:var(--danger)">{{ fora }} sistema(s) fora do ar.</strong>{% else %}Todos os sistemas operando.{% endif %}</p>{% endblock %}
 {% block acoes %}
+<a class="btn" href="{% url 'sla:uptimerobot' %}">{% icone "activity" 16 %} UptimeRobot</a>
 <a class="btn" href="{% url 'sla:alertas' %}">{% icone "bell" 16 %} Alertas</a>
 {% if pode_escrever %}
 {% if sistemas %}<form method="post" action="{% url 'sla:verificar_todos' %}">{% csrf_token %}<button class="btn" type="submit">{% icone "refresh" 16 %} Verificar agora</button></form>{% endif %}
@@ -17,8 +18,8 @@
   <div class="card-cab"><h3>Incidentes recentes</h3></div>
   {% for i in incidentes %}
   <div class="item-prev">
-    <span class="ponto {% if i.status == 'ABERTO' %}danger{% else %}success{% endif %}"></span>
-    <div><a class="titulo" href="{% url 'sla:sistema_detalhe' i.sistema_id %}">{{ i.sistema }}</a><div class="small muted">{{ i.inicio|date:"d/m H:i" }}{% if i.fim %} → {{ i.fim|date:"d/m H:i" }}{% endif %} · {{ i.causa|default:"—" }}</div></div>
+    <span class="ponto {% if i.status == 'ABERTO' %}danger{% elif i.status == 'DESCARTADO' %}neutral{% else %}success{% endif %}"></span>
+    <div><a class="titulo" href="{% url 'sla:sistema_detalhe' i.sistema_id %}">{{ i.sistema }}</a>{% if i.status == "DESCARTADO" %} <span class="xs muted">(falso positivo)</span>{% endif %}<div class="small muted">{{ i.inicio|date:"d/m H:i" }}{% if i.fim %} → {{ i.fim|date:"d/m H:i" }}{% endif %} · {{ i.causa|default:"—" }}</div></div>
     <span class="small mono">{% if i.status == "ABERTO" %}em andamento{% else %}{{ i.duracao|duracao_curta }}{% endif %}</span>
   </div>
   {% empty %}<p class="muted small">Nenhum incidente registrado.</p>{% endfor %}

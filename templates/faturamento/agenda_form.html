@@ -37,16 +37,22 @@
           {% else %}
             {% include "components/campo.html" with campo=c.bf largo=c.largo mostrar_se=c.mostrar_se %}
             {% if c.placeholders %}
-            <div class="placeholders inteiro" style="margin-top:-6px" aria-label="Inserir campo automático">
-              <button type="button" data-inserir="{competencia}" data-alvo="id_discriminacao">{competencia}</button>
-              <button type="button" data-inserir="{mes_extenso}" data-alvo="id_discriminacao">{mes_extenso}</button>
-              <button type="button" data-inserir="{mes_nome}" data-alvo="id_discriminacao" title="Ex.: Junho">{mes_nome}</button>
-              <button type="button" data-inserir="{parcela2} de {total_parcelas}" data-alvo="id_discriminacao" title="Ex.: 01 de 12">{parcela2} de {total_parcelas}</button>
-              <button type="button" data-inserir="{parcela}º mês" data-alvo="id_discriminacao" title="Ex.: 3º mês de execução">{parcela}º mês</button>
-              <button type="button" data-inserir="{valor}" data-alvo="id_discriminacao">{valor}</button>
-              <button type="button" data-inserir="{contrato}" data-alvo="id_discriminacao">{contrato}</button>
-              <button type="button" data-inserir="{empenho}" data-alvo="id_discriminacao">{empenho}</button>
-              <button type="button" data-inserir="{objeto}" data-alvo="id_discriminacao">{objeto}</button>
+            <div class="placeholders inteiro" style="margin-top:-6px" aria-label="Inserir campo automático"{% if c.mostrar_se %} data-mostrar-se="{{ c.mostrar_se }}"{% endif %}>
+              <button type="button" data-inserir="{competencia}" data-alvo="{{ c.bf.id_for_label }}">{competencia}</button>
+              <button type="button" data-inserir="{mes_extenso}" data-alvo="{{ c.bf.id_for_label }}">{mes_extenso}</button>
+              <button type="button" data-inserir="{mes_nome}" data-alvo="{{ c.bf.id_for_label }}" title="Ex.: Junho">{mes_nome}</button>
+              <button type="button" data-inserir="{parcela2} de {total_parcelas}" data-alvo="{{ c.bf.id_for_label }}" title="Ex.: 01 de 12">{parcela2} de {total_parcelas}</button>
+              <button type="button" data-inserir="{parcela}º mês" data-alvo="{{ c.bf.id_for_label }}" title="Ex.: 3º mês de execução">{parcela}º mês</button>
+              <button type="button" data-inserir="{valor}" data-alvo="{{ c.bf.id_for_label }}">{valor}</button>
+              <button type="button" data-inserir="{contrato}" data-alvo="{{ c.bf.id_for_label }}">{contrato}</button>
+              <button type="button" data-inserir="{empenho}" data-alvo="{{ c.bf.id_for_label }}">{empenho}</button>
+              <button type="button" data-inserir="{objeto}" data-alvo="{{ c.bf.id_for_label }}">{objeto}</button>
+              {% if c.bf.name == "mensagem_envio" %}
+              <button type="button" data-inserir="{nota}" data-alvo="{{ c.bf.id_for_label }}" title="Número da NFS-e">{nota}</button>
+              <button type="button" data-inserir="{anexos}" data-alvo="{{ c.bf.id_for_label }}" title="Lista dos documentos anexados">{anexos}</button>
+              <button type="button" data-inserir="{empresa}" data-alvo="{{ c.bf.id_for_label }}">{empresa}</button>
+              <button type="button" data-inserir="{cnpj}" data-alvo="{{ c.bf.id_for_label }}">{cnpj}</button>
+              {% endif %}
             </div>
             {% endif %}
           {% endif %}
