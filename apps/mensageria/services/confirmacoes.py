@@ -4,7 +4,7 @@ Cada ação registra um executor. O código é curto, aleatório e único entre 
 """
 
 import secrets
-from datetime import timedelta
+from datetime import date, timedelta
 
 from django.core.exceptions import ValidationError
 from django.db import transaction
@@ -161,7 +161,7 @@ def _receber(c, aceitar, por):
     config = ConfiguracaoFiscal.objects.filter(empresa=c.empresa).select_related("conta_recebimento").first()
     padrao = (config.conta_recebimento if config else None) \
         or ContaBancaria.objects.filter(empresa=c.empresa, ativo=True).first()
-    hoje = timezone.localdate()
+    hoje = date.fromisoformat(c.dados["data"]) if c.dados.get("data") else timezone.localdate()
     feitos, erros = [], []
     for lanc in indicadores.abertos(c.empresa).filter(pk__in=c.dados.get("ids", [])):
         try:
@@ -173,7 +173,8 @@ def _receber(c, aceitar, por):
     from apps.core.templatetags.ks import brl
 
     total = sum((x.valor for x in feitos), 0)
-    texto = f"{len(feitos)} recebimento(s) baixado(s) em {hoje:%d/%m/%Y} · {brl(total)}." if feitos else "Nenhuma baixa feita."
+    texto = (f"{len(feitos)} recebimento(s) baixado(s) com data de {hoje:%d/%m/%Y} · {brl(total)}." if feitos
+             else "Nenhuma baixa feita.")
     if len(feitos) < len(c.dados.get("ids", [])) and not erros:
         texto += " Algumas notas já tinham sido baixadas."
     return texto + (" Pendentes: " + " | ".join(erros) if erros else "")

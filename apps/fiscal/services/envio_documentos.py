@@ -111,7 +111,7 @@ def frase_anexos(estado):
     return f"{lista}, assinados digitalmente (ICP-Brasil), e certidões de regularidade fiscal e trabalhista vigentes"
 
 
-def _pdf_previa(chave, doc):
+def pdf_previa(chave, doc):
     if chave == "relatorio":
         from apps.operacao.relatorios import previa_pdf
 
@@ -140,16 +140,22 @@ def anexos_previa(confirmacao, nota, estado):
         if doc is None:
             continue
         if chave in estado["rascunhos"]:
-            anexos.append(Anexo.criar(confirmacao, f"PREVIA_{titulos[chave]}_{competencia}.pdf", _pdf_previa(chave, doc),
+            anexos.append(Anexo.criar(confirmacao, f"PREVIA_{titulos[chave]}_{competencia}.pdf", pdf_previa(chave, doc),
                                       descricao="Prévia para confirmação no WhatsApp", retencao_anos=1))
         else:
             anexos.append(doc.pdf)
     anexos += [d.anexo for d in estado["enviados"]]
-    for indice, cert in enumerate(estado["certidoes"], 1):
+    return anexos + copias_certidoes(confirmacao, estado["certidoes"], "Cópia para confirmação no WhatsApp")
+
+
+def copias_certidoes(objeto, certidoes, descricao):
+    """Certidões como core.Anexo (o WhatsApp envia anexos), vinculadas a `objeto`."""
+    anexos = []
+    for indice, cert in enumerate(certidoes, 1):
         with cert.arquivo.open("rb") as f:
             dados = f.read(15_000_001)
-        anexos.append(Anexo.criar(confirmacao, f"certidao_{indice:02d}_{slugify(cert.tipo.nome)[:60]}.pdf", dados,
-                                  descricao="Cópia para confirmação no WhatsApp", retencao_anos=1))
+        anexos.append(Anexo.criar(objeto, f"certidao_{indice:02d}_{slugify(cert.tipo.nome)[:60]}.pdf", dados,
+                                  descricao=descricao, retencao_anos=1))
     return anexos
 
 

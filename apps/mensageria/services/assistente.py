@@ -27,8 +27,12 @@ INSTRUCOES = """Você é o assistente interno do KS CENTRAL, sistema de gestão 
 Regras:
 - Responda em português do Brasil, curto e direto, formatado para WhatsApp (*negrito*, listas com •). Sem tabelas.
 - Use SEMPRE as ferramentas para obter dados; nunca invente números, notas, datas ou status.
-- Para registrar despesa ou pedir emissão de nota, chame a ferramenta correspondente: ela cria um pedido e devolve um
-  código. Informe o código e diga que a ação só acontece após responder SIM + código.
+- Para registrar despesa, pedir emissão de nota, alterar valor de contrato ou dar baixa em recebimento, chame a
+  ferramenta correspondente: ela cria um pedido e devolve um código. Repita a prévia devolvida e diga que a ação só
+  acontece após responder SIM + código.
+- Alteração de valor sempre a partir de uma competência (mm/aaaa). Se o usuário disser só o mês da emissão ou não
+  disser desde quando vale, pergunte qual competência passa a ter o novo valor.
+- Para pedidos de arquivos (nota, recibo, relatório, planilha, SLA, certidões, contrato), use enviar_documentos.
 - Valores em reais no formato R$ 1.234,56. Datas no formato dd/mm/aaaa.
 - Se faltar informação para uma ação (valor, contrato, competência), pergunte antes de chamar a ferramenta.
 - Se a pergunta não tiver relação com a empresa, responda brevemente que você atende assuntos do KS CENTRAL."""
@@ -63,11 +67,7 @@ def ferramentas(empresa, anexos):
     from apps.contratos.models import Contrato
 
     def _contrato(ref):
-        ref = (ref or "").strip()
-        qs = Contrato.objects.filter(empresa=empresa).select_related("cliente")
-        return (qs.filter(numero__iexact=ref).first() or qs.filter(numero__icontains=ref).first()
-                or qs.filter(cliente__razao_social__icontains=ref).first()
-                or qs.filter(cliente__nome_fantasia__icontains=ref).first() or qs.filter(objeto__icontains=ref).first())
+        return comandos.achar_contrato(empresa, ref)
 
     def status_monitoramento() -> str:
         """Situação atual de todos os sistemas monitorados (no ar, fora, lento), tempo de resposta e uptime de 30 dias."""
@@ -201,6 +201,65 @@ def ferramentas(empresa, anexos):
                 f"{centro.nome}, categoria {cat.nome}{', já paga' if ja_pago else ''}. "
                 f"Responda SIM {pedido.codigo} para registrar.")
 
+    def alterar_valor_contrato(contrato: str, novo_valor: float, a_partir_da_competencia: str, motivo: str = "") -> str:
+        """Altera o valor mensal faturado de um contrato a partir de uma competência (mm/aaaa), por reajuste, correção
+        ou repactuação. Competências anteriores mantêm o valor antigo. Não altera: cria um pedido de confirmação e
+        devolve a prévia (o que muda e o que precisa de revisão manual)."""
+        from apps.faturamento.services import valores
+
+        c = _contrato(contrato)
+        if c is None:
+            return f"Contrato '{contrato}' não encontrado."
+        agenda = getattr(c, "agenda_faturamento", None)
+        if agenda is None:
+            return f"O contrato {c.numero} não tem faturamento recorrente configurado."
+        try:
+            novo = Decimal(str(round(float(novo_valor), 2)))
+        except (InvalidOperation, ValueError, TypeError):
+            return "Valor inválido."
+        comp = _competencia(a_partir_da_competencia)
+        texto = valores.previa(agenda, novo, comp)
+        pedido = confirmacoes.criar(empresa, "faturamento.alterar_valor", agenda,
+                                    f"Valor {c.numero}: {brl(agenda.valor)} → {brl(novo)} a partir de {comp:%m/%Y}",
+                                    horas=24, dados={"novo": str(novo), "a_partir": comp.isoformat(),
+                                                     "anterior": str(agenda.valor), "motivo": motivo[:200]})
+        return f"{texto}\nResponda SIM {pedido.codigo} para aplicar ou NAO {pedido.codigo} para cancelar."
+
+    def proximas_emissoes(dias: int = 60) -> str:
+        """Emissões de NFS-e programadas nos próximos `dias` dias, com contrato, objeto, competência e valor."""
+        return comandos.cmd_proximas(empresa, max(1, min(dias, 180)))[0][0]
+
+    def notas_a_receber() -> str:
+        """Notas autorizadas ainda não pagas, agrupadas por competência, com vencimento."""
+        return comandos.cmd_receber(empresa)[0][0]
+
+    def recebimentos_realizados(inicio: str = "", fim: str = "", contrato: str = "") -> str:
+        """O que já foi recebido (baixado) entre `inicio` e `fim` (dd/mm/aaaa; padrão: mês atual até hoje),
+        opcionalmente de um contrato ou cliente, agrupado por contrato."""
+        hoje = timezone.localdate()
+        ini = _data(inicio) if inicio else hoje.replace(day=1)
+        return comandos.resumo_recebidos(empresa, ini, _data(fim) if fim else hoje, contrato or None)
+
+    def registrar_recebimento(competencia: str, contrato: str = "", forma: str = "ted", data_pagamento: str = "") -> str:
+        """Dá baixa nas notas em aberto de uma competência (mm/aaaa), de todos os contratos ou só de um (número ou
+        cliente). `forma`: pix, ted, boleto ou dinheiro. `data_pagamento` dd/mm/aaaa (padrão hoje). Não baixa: cria
+        um pedido de confirmação."""
+        comp = _competencia(competencia)
+        forma = comandos.normalizar(forma)
+        return comandos.cmd_recebido(empresa, contrato or None, comp.month, comp.year,
+                                     forma if forma in comandos.FORMAS else None,
+                                     _data(data_pagamento) if data_pagamento else None)[0][0]
+
+    def enviar_documentos(contrato: str, competencia: str, documentos: str = "") -> str:
+        """Envia pelo WhatsApp os PDFs de uma competência (mm/aaaa) do contrato. `documentos`, separados por vírgula:
+        nota, recibo, relatorio, planilha, sla, certidoes, contrato. Vazio envia nota, recibo, relatório, planilha e
+        SLA. Documento ainda não aprovado vai como PRÉVIA."""
+        comp = _competencia(competencia)
+        textos, arquivos = comandos.cmd_documentos(empresa, contrato, comp.month, comp.year,
+                                                   documentos.replace(",", " ").split())
+        anexos.extend(arquivos)
+        return textos[0]
+
     def certidoes() -> str:
         """Certidões da empresa: validade e situação (válida, vencendo, vencida)."""
         from apps.certidoes.models import TipoCertidao
@@ -231,8 +290,9 @@ def ferramentas(empresa, anexos):
         return "Planilha gerada; será enviada em seguida."
 
     return [status_monitoramento, resumo_financeiro, previsao_recebimentos, cobrancas_vencidas, listar_contratos,
-            faturamento_pendente, consultar_nota, listar_notas, solicitar_nota, registrar_despesa, certidoes,
-            custos_do_periodo, enviar_relatorio_financeiro]
+            faturamento_pendente, proximas_emissoes, consultar_nota, listar_notas, solicitar_nota, alterar_valor_contrato,
+            notas_a_receber, recebimentos_realizados, registrar_recebimento, registrar_despesa, enviar_documentos,
+            certidoes, custos_do_periodo, enviar_relatorio_financeiro]
 
 
 def historico(empresa, telefone):
@@ -294,6 +354,24 @@ def _emitir(c, aceitar, por):
     else:
         ciclo = ciclos.executar(ciclo, None, manual=True)
     return f"{ciclo}: {ciclo.mensagem or ciclo.get_status_display()}"
+
+
+@confirmacoes.acao("faturamento.alterar_valor")
+def _alterar_valor(c, aceitar, por):
+    from apps.faturamento.models import AgendaFaturamento
+    from apps.faturamento.services import valores
+
+    agenda = AgendaFaturamento.objects.filter(pk=c.objeto_id, empresa=c.empresa).first()
+    if agenda is None:
+        return "Agenda de faturamento não encontrada."
+    if not aceitar:
+        return "Ok, o valor não foi alterado."
+    d = c.dados
+    try:
+        return valores.aplicar(agenda, Decimal(d["novo"]), date.fromisoformat(d["a_partir"]), d.get("motivo", ""),
+                               Decimal(d["anterior"]), por=por)
+    except ValidationError as erro:
+        return "Não alterado: " + "; ".join(erro.messages)
 
 
 @confirmacoes.acao("financeiro.despesa")

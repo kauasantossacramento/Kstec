@@ -28,6 +28,8 @@ AJUDA = """🤖 *KS CENTRAL* — comandos
 • *receber* — notas em aberto por competência
 • *recebido 10/2026* — dar baixa nas notas da competência
 • *recebido 136 10/2026* — só as do contrato (número ou nome)
+• *entradas* — o que já foi recebido no mês (ou *entradas 09/2026*)
+• *documentos 136 10/2026* — nota, recibo, relatório, planilha e SLA da competência (acrescente *certidoes* ou *contrato*)
 • *notas* — últimas NFS-e
 • *nota 123* — PDF e XML da NFS-e nº 123
 • *relatorio* — planilha com o resumo financeiro
@@ -114,7 +116,15 @@ def responder_admin(empresa, texto, telefone="", pergunta_original=None):
     m = RECEBIDO.match(texto)
     if m:
         return cmd_recebido(empresa, m.group("contrato"), int(m.group("mes")), int(m.group("ano")), m.group("forma"))
-    comando = texto.split(" ")[0] if texto else ""
+    m = ENTRADAS.match(texto)
+    if m:
+        return cmd_entradas(empresa, int(m.group("mes")) if m.group("mes") else None,
+                            int(m.group("ano")) if m.group("ano") else None)
+    m = DOCUMENTOS.match(texto)
+    if m:
+        return cmd_documentos(empresa, m.group("contrato"), int(m.group("mes")), int(m.group("ano")),
+                              m.group("tipos").split())
+    comando =texto.split(" ")[0] if texto else ""
     if comando not in ("ajuda", "menu", "?", "pausar", "retomar") and pergunta_original is not None:
         from . import assistente
 
@@ -135,6 +145,30 @@ def responder_admin(empresa, texto, telefone="", pergunta_original=None):
 RECEBIDO = re.compile(r"^recebid[oa]s?\s+(?:(?P<contrato>\S+)\s+)?(?P<mes>\d{1,2})/(?P<ano>\d{4})"
                       r"(?:\s+(?P<forma>pix|ted|transferencia|boleto|dinheiro))?$")
 FORMAS = {"pix": "PIX", "ted": "TED", "transferencia": "TED", "boleto": "BOLETO", "dinheiro": "DINHEIRO"}
+ENTRADAS = re.compile(r"^(?:entradas|recebidos)(?:\s+(?P<mes>\d{1,2})/(?P<ano>\d{4}))?$")
+DOCUMENTOS = re.compile(r"^(?:documentos|docs)\s+(?P<contrato>\S+)\s+(?P<mes>\d{1,2})/(?P<ano>\d{4})(?P<tipos>(?:\s+\w+)*)$")
+TIPOS_DOC = {"nota": "nota", "nfse": "nota", "danfse": "nota", "recibo": "recibo", "relatorio": "relatorio",
+             "atividades": "relatorio", "planilha": "planilha", "custos": "planilha", "demonstrativo": "planilha",
+             "sla": "sla", "certidoes": "certidoes", "certidao": "certidoes", "contrato": "contrato"}
+DOCS_PADRAO = ("nota", "recibo", "relatorio", "planilha", "sla")
+
+
+def achar_contrato(empresa, ref):
+    """Contrato pelo número (exato ou parcial), cliente ou objeto."""
+    from apps.contratos.models import Contrato
+
+    ref = (ref or "").strip()
+    if not ref:
+        return None
+    qs = Contrato.objects.filter(empresa=empresa).select_related("cliente")
+    return (qs.filter(numero__iexact=ref).first() or qs.filter(numero__icontains=ref).first()
+            or qs.filter(cliente__razao_social__icontains=ref).first()
+            or qs.filter(cliente__nome_fantasia__icontains=ref).first() or qs.filter(objeto__icontains=ref).first())
+
+
+def _casa_contrato(ct, termo):
+    return bool(ct) and (normalizar(ct.numero).startswith(termo) or termo in normalizar(str(ct.cliente))
+                         or termo in normalizar(ct.objeto))
 
 
 def resumo_objeto(contrato, limite=70):
@@ -183,8 +217,7 @@ def _abertos_por_competencia(empresa, ano=None, mes=None, contrato=None):
              if ano is None or indicadores.competencia_de(x) == date(ano, mes, 1)]
     if contrato:
         termo = normalizar(contrato)
-        itens = [x for x in itens if (ct := indicadores.contrato_de(x)) and (
-            normalizar(ct.numero).startswith(termo) or termo in normalizar(str(ct.cliente)) or termo in normalizar(ct.objeto))]
+        itens = [x for x in itens if _casa_contrato(indicadores.contrato_de(x), termo)]
     return itens
 
 
@@ -216,9 +249,13 @@ def cmd_receber(empresa):
               "Peço sua confirmação antes."], []
 
 
-def cmd_recebido(empresa, contrato, mes, ano, forma=None):
+def cmd_recebido(empresa, contrato, mes, ano, forma=None, data_pagamento=None):
     if not 1 <= mes <= 12:
         return ["Competência inválida. Ex.: *recebido 10/2026*."], []
+    hoje = timezone.localdate()
+    data_pagamento = data_pagamento or hoje
+    if data_pagamento > hoje:
+        return [f"A data do recebimento ({data_pagamento:%d/%m/%Y}) não pode ser futura."], []
     itens = _abertos_por_competencia(empresa, ano, mes, contrato)
     if not itens:
         alvo = f" do contrato {contrato}" if contrato else ""
@@ -227,15 +264,162 @@ def cmd_recebido(empresa, contrato, mes, ano, forma=None):
     total = sum((x.valor for x in itens), Decimal("0"))
     c = confirmacoes.criar(empresa, "financeiro.receber", itens[0], f"Baixa de {len(itens)} recebível(is) da competência "
                            f"{mes:02d}/{ano} · {brl(total)}", horas=24,
-                           dados={"ids": [str(x.pk) for x in itens], "forma": forma})
-    hoje = timezone.localdate()
+                           dados={"ids": [str(x.pk) for x in itens], "forma": forma, "data": data_pagamento.isoformat()})
     return [f"💰 *Confirmar recebimento* · competência {mes:02d}/{ano}\n" + "\n".join(_linha_recebivel(x) for x in itens)
-            + f"\n\nTotal: *{brl(total)}* · recebido em {hoje:%d/%m/%Y} · {FORMAS_ROTULO.get(forma, forma)}"
+            + f"\n\nTotal: *{brl(total)}* · recebido em {data_pagamento:%d/%m/%Y} · {FORMAS_ROTULO.get(forma, forma)}"
             + f"\n\nResponda *SIM {c.codigo}* para dar baixa ou *NAO {c.codigo}* para cancelar."
             + "\n_Outra forma: acrescente pix, ted, boleto ou dinheiro ao comando (ex.: recebido 10/2026 pix)._"], []
 
 
 FORMAS_ROTULO = {"PIX": "PIX", "TED": "transferência", "BOLETO": "boleto", "DINHEIRO": "dinheiro"}
+
+
+def resumo_recebidos(empresa, inicio, fim, contrato=None):
+    """Receitas baixadas (data de pagamento) no período, agrupadas por contrato."""
+    from apps.financeiro.models import Lancamento
+    from apps.financeiro.services import indicadores
+
+    qs = Lancamento.objects.filter(empresa=empresa, tipo="RECEITA", status="PAGO", data_pagamento__range=(inicio, fim)) \
+        .select_related("nota_fiscal__contrato__cliente", "pessoa", "centro_custo__contrato").order_by("data_pagamento")
+    itens = list(qs)
+    if contrato:
+        termo = normalizar(contrato)
+        itens = [x for x in itens if _casa_contrato(indicadores.contrato_de(x), termo)]
+    periodo = f"{inicio:%d/%m/%Y} a {fim:%d/%m/%Y}"
+    if not itens:
+        return f"Nenhum recebimento registrado de {periodo}" + (f" para {contrato}." if contrato else ".")
+    grupos = {}
+    for x in itens:
+        ct = indicadores.contrato_de(x)
+        grupos.setdefault(f"{ct.numero} — {ct.cliente}" if ct else str(x.pessoa or "Sem contrato"), []).append(x)
+    blocos = []
+    for nome, lista in sorted(grupos.items(), key=lambda g: -sum(x.valor_pago or x.valor for x in g[1])):
+        soma = sum((x.valor_pago or x.valor for x in lista), Decimal("0"))
+        blocos.append(f"*{nome}* · {brl(soma)}\n" + "\n".join(
+            f"• {x.data_pagamento:%d/%m} · " + (f"NFS-e {x.nota_fiscal.numero_nfse} · " if x.nota_fiscal_id else "")
+            + f"comp. {indicadores.competencia_de(x):%m/%Y} · {brl(x.valor_pago or x.valor)}"
+            + (f" · {x.get_forma_pagamento_display()}" if x.forma_pagamento else "") for x in lista))
+    total = sum((x.valor_pago or x.valor for x in itens), Decimal("0"))
+    return f"✅ *Recebido de {periodo}* · {brl(total)} ({len(itens)})\n\n" + "\n\n".join(blocos)
+
+
+def cmd_entradas(empresa, mes=None, ano=None):
+    from apps.financeiro.services import indicadores
+
+    hoje = timezone.localdate()
+    if mes is not None and not 1 <= mes <= 12:
+        return ["Mês inválido. Ex.: *entradas 09/2026*."], []
+    inicio = date(ano, mes, 1) if mes else hoje.replace(day=1)
+    return [resumo_recebidos(empresa, inicio, min(indicadores.fim_mes(inicio), hoje) if inicio <= hoje
+                             else indicadores.fim_mes(inicio))], []
+
+
+def _documento_competencia(contrato, competencia, chave):
+    """(anexo, descrição) do relatório, planilha ou SLA: aprovado e assinado, enviado em Documentos ou prévia do
+    rascunho. Sem documento: (None, motivo)."""
+    from apps.contratos.models import DocumentoContrato
+    from apps.core.models import Anexo
+    from apps.financeiro.models import PlanilhaCustos
+    from apps.fiscal.services import envio_documentos
+    from apps.operacao.models import RelatorioAtividades
+    from apps.sla.models import RelatorioSLA
+
+    modelo, tipo, nome, arquivo = {
+        "relatorio": (RelatorioAtividades, "RELATORIO_ATIVIDADES", "relatório de atividades", "relatorio_atividades"),
+        "planilha": (PlanilhaCustos, "PLANILHA_CUSTOS", "planilha de custos", "demonstrativo_custos"),
+        "sla": (RelatorioSLA, "RELATORIO_SLA", "relatório de SLA", "relatorio_sla")}[chave]
+    base = modelo.objects.filter(empresa=contrato.empresa, contrato=contrato, competencia=competencia,
+                                 ativo=True).order_by("-versao")
+    aprovado = base.filter(status="APROVADO", pdf__isnull=False).select_related("pdf").first()
+    if aprovado:
+        return aprovado.pdf, f"{nome} (assinado)"
+    enviado = DocumentoContrato.objects.filter(contrato=contrato, competencia=competencia, tipo=tipo, ativo=True) \
+        .select_related("anexo").first()
+    if enviado:
+        return enviado.anexo, f"{nome} (documento enviado)"
+    rascunho = base.filter(status="RASCUNHO").first()
+    if rascunho is None:
+        return None, f"{nome}: não há"
+    try:
+        pdf = envio_documentos.pdf_previa(chave, rascunho)
+    except Exception as erro:  # noqa: BLE001 — rascunho incompleto não impede os demais documentos.
+        return None, f"{nome}: prévia indisponível ({erro})"
+    return (Anexo.criar(contrato, f"PREVIA_{arquivo}_{competencia:%Y%m}.pdf", pdf, retencao_anos=1,
+                        descricao="Prévia enviada pelo WhatsApp"), f"{nome} (PRÉVIA, ainda não aprovado)")
+
+
+def cmd_documentos(empresa, ref, mes, ano, tipos=None):
+    """PDFs de uma competência do contrato para o administrador: nota, recibo, relatório, planilha, SLA,
+    e, se pedidos, certidões vigentes e documentos do contrato."""
+    from django.contrib.contenttypes.models import ContentType
+    from django.core.exceptions import ValidationError
+
+    from apps.contratos.models import DocumentoContrato
+    from apps.core.models import Anexo
+    from apps.fiscal.models import NotaFiscal
+    from apps.fiscal.services import envio_documentos, recibo
+    from apps.fiscal.services.entregas import certidoes_validas
+    from apps.fiscal.services.pdf_nfse import garantir_pdf
+
+    if not 1 <= mes <= 12:
+        return ["Competência inválida. Ex.: *documentos 136 10/2026*."], []
+    contrato = achar_contrato(empresa, ref)
+    if contrato is None:
+        return [f"Contrato '{ref}' não encontrado. Envie *contratos* para ver a lista."], []
+    pedidos = [TIPOS_DOC[t] for t in (normalizar(t) for t in tipos or []) if t in TIPOS_DOC]
+    explicitos = bool(pedidos)
+    pedidos = list(dict.fromkeys(pedidos or DOCS_PADRAO))
+    competencia = date(ano, mes, 1)
+    nota = NotaFiscal.objects.filter(empresa=empresa, contrato=contrato, competencia__year=ano, competencia__month=mes,
+                                     status="AUTORIZADA").order_by("-autorizada_em").first()
+    anexos, enviados, faltas = [], [], []
+    for chave in pedidos:
+        try:
+            if chave in ("nota", "recibo"):
+                if nota is None:
+                    faltas.append(f"{'NFS-e' if chave == 'nota' else 'recibo'}: sem nota autorizada na competência")
+                    continue
+                if chave == "nota":
+                    anexos.append(garantir_pdf(nota))
+                    enviados.append(f"NFS-e {nota.numero_nfse}")
+                else:
+                    anexos.append(Anexo.objects.filter(
+                        content_type=ContentType.objects.get_for_model(nota), object_id=str(nota.pk),
+                        nome=f"recibo_nfse_{nota.numero_nfse}.pdf").order_by("-criado_em").first() or recibo.gerar(nota))
+                    enviados.append("recibo")
+            elif chave in ("relatorio", "planilha", "sla"):
+                if chave == "sla" and not explicitos and not contrato.exige_relatorio_sla:
+                    continue
+                if chave == "relatorio" and not explicitos and not contrato.exige_relatorio_atividades:
+                    continue
+                anexo, descricao = _documento_competencia(contrato, competencia, chave)
+                if anexo is None:
+                    faltas.append(descricao)
+                    continue
+                anexos.append(anexo)
+                enviados.append(descricao)
+            elif chave == "certidoes":
+                certs = certidoes_validas(contrato)
+                anexos += envio_documentos.copias_certidoes(contrato, certs, "Cópia enviada pelo WhatsApp")
+                enviados.append(f"{len(certs)} certidão(ões) vigente(s)")
+            elif chave == "contrato":
+                docs = list(DocumentoContrato.objects.filter(contrato=contrato, tipo="CONTRATO", ativo=True)
+                            .select_related("anexo").order_by("-criado_em")[:5])
+                if not docs:
+                    faltas.append("contrato: nenhum arquivo em Contrato → Documentos")
+                    continue
+                anexos += [d.anexo for d in docs]
+                enviados.append(f"{len(docs)} documento(s) do contrato")
+        except ValidationError as erro:
+            faltas.append("; ".join(erro.messages))
+    texto = f"📎 *Documentos · {contrato.numero} · {competencia:%m/%Y}*\n{contrato.cliente}"
+    if enviados:
+        texto += "\nSeguem: " + ", ".join(enviados) + "."
+    if faltas:
+        texto += "\n⚠️ " + "\n⚠️ ".join(faltas)
+    if not anexos:
+        texto += "\nNenhum arquivo para enviar."
+    return [texto], anexos
 
 
 def cmd_status(empresa):
